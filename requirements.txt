@@ -1,0 +1,5 @@
+chromadb
+pymupdf
+sentence-transformers
+google-genai
+python-dotenv
