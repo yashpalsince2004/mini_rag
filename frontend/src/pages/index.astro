@@ -1,5 +1,5 @@
 ---
-// Mini RAG - Astro Frontend
+// Mini RAG - Astro Frontend (Clay Design System)
 ---
 
 <!DOCTYPE html>
@@ -7,97 +7,124 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mini RAG — PDF Chatbot</title>
+  <title>Mini RAG — PDF Question Answering</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
-  <div class="app-container">
-    <!-- Header -->
-    <header class="app-header">
-      <div class="header-content">
-        <div class="badge">EDUCATIONAL RAG</div>
-        <h1>Mini RAG</h1>
-        <p class="subtitle">Ask questions about your PDF with local ChromaDB retrieval and Gemini</p>
+  <!-- Top Navigation (Clay top-nav) -->
+  <header class="top-nav">
+    <div class="nav-container">
+      <div class="nav-brand">
+        <span class="logo-symbol">✦</span>
+        <span class="logo-text">Mini RAG</span>
+        <span class="badge-pill">EDUCATIONAL</span>
       </div>
-    </header>
+      <div class="nav-right">
+        <span class="pill-tag">all-MiniLM-L6-v2</span>
+        <span class="pill-tag featured">Gemini 2.5 Flash</span>
+      </div>
+    </div>
+  </header>
 
-    <main class="main-content">
-      <!-- Document Selection Card -->
-      <section class="card selection-card">
-        <div class="card-header">
-          <span class="section-label">SELECT DOCUMENT</span>
+  <div class="app-layout">
+    <!-- Hero / Headline Band -->
+    <section class="hero-band">
+      <div class="badge-pill cta-badge">RETRIEVAL-AUGMENTED GENERATION</div>
+      <h1 class="hero-headline">Ask questions about your documents.</h1>
+      <p class="hero-subline">
+        Semantic vector search powered by local ChromaDB embeddings and grounded generation with Google Gemini.
+      </p>
+    </section>
+
+    <!-- Document Selection Card -->
+    <section class="content-card document-card">
+      <div class="card-top-row">
+        <span class="caption-uppercase">SELECT DOCUMENT</span>
+        <span class="card-caption">Local PDF directory</span>
+      </div>
+
+      <div class="selector-row">
+        <div class="select-wrapper">
+          <select id="doc-select" disabled>
+            <option value="">Scanning documents/ directory...</option>
+          </select>
         </div>
-        <div class="selector-row">
-          <div class="select-wrapper">
-            <select id="doc-select" disabled>
-              <option value="">Loading available PDFs...</option>
-            </select>
-          </div>
-          <button id="load-btn" class="btn btn-primary" disabled>
-            <span class="btn-text">Load Document</span>
-          </button>
+        <button id="load-btn" class="button-primary" disabled>
+          <span class="btn-text">Load Document</span>
+        </button>
+      </div>
+
+      <!-- Status Banner (Clay feature card styling) -->
+      <div id="doc-status-banner" class="status-banner info-status hidden">
+        <div class="status-dot"></div>
+        <div class="status-content">
+          <strong id="doc-name">No document selected</strong>
+          <span id="doc-meta" class="meta-description">Select a PDF above to initialize the vector database.</span>
         </div>
+      </div>
 
-        <!-- Status & Document Info -->
-        <div id="doc-status-banner" class="status-banner info hidden">
-          <div class="status-indicator"></div>
-          <div class="status-text">
-            <strong id="doc-name">No document selected</strong>
-            <span id="doc-meta" class="meta-text">Select a PDF to start chatting</span>
-          </div>
+      <!-- Error Notification -->
+      <div id="error-banner" class="status-banner error-status hidden">
+        <span class="error-symbol">⚠️</span>
+        <span id="error-message">An error occurred while connecting to the backend.</span>
+      </div>
+    </section>
+
+    <!-- Chat Card -->
+    <section class="content-card chat-card">
+      <div class="card-top-row">
+        <div class="conversation-label-group">
+          <span class="caption-uppercase">CONVERSATION</span>
+          <span id="active-doc-tag" class="doc-badge hidden">None</span>
         </div>
+        <button id="clear-btn" class="button-secondary btn-sm" disabled>Clear Chat</button>
+      </div>
 
-        <!-- Error Notification -->
-        <div id="error-banner" class="status-banner error hidden">
-          <span class="error-icon">⚠️</span>
-          <span id="error-message">An error occurred</span>
+      <!-- Messages Flow Area -->
+      <div id="chat-messages" class="chat-messages">
+        <div id="empty-state" class="empty-state">
+          <div class="empty-icon-card">📄</div>
+          <h3>No Document Loaded</h3>
+          <p>Choose a PDF from the selector above and click <strong>Load Document</strong> to prepare the vector index and begin querying.</p>
         </div>
-      </section>
+      </div>
 
-      <!-- Chat Section -->
-      <section class="card chat-card">
-        <div class="chat-header">
-          <span class="section-label">CONVERSATION</span>
-          <button id="clear-btn" class="btn btn-secondary btn-sm" disabled>Clear Chat</button>
-        </div>
-
-        <!-- Messages Area -->
-        <div id="chat-messages" class="chat-messages">
-          <div id="empty-state" class="empty-state">
-            <div class="empty-icon">📄</div>
-            <h3>No Document Loaded</h3>
-            <p>Select a PDF file above and click <strong>Load Document</strong> to initialize the RAG vector index.</p>
-          </div>
-        </div>
-
-        <!-- Chat Input Form -->
-        <form id="chat-form" class="chat-input-form">
-          <input
-            type="text"
-            id="query-input"
-            class="chat-input"
-            placeholder="Select a document first..."
-            autocomplete="off"
-            disabled
-          />
-          <button type="submit" id="send-btn" class="btn btn-primary send-btn" disabled>
-            <span>Send</span>
-          </button>
-        </form>
-      </section>
-    </main>
-
-    <footer class="app-footer">
-      <span>Pipeline: PyMuPDF → Word Chunking → Sentence Transformers (all-MiniLM-L6-v2) → ChromaDB → Gemini 2.5 Flash</span>
-    </footer>
+      <!-- Chat Input Form -->
+      <form id="chat-form" class="chat-input-form">
+        <input
+          type="text"
+          id="query-input"
+          class="text-input"
+          placeholder="Select a document first..."
+          autocomplete="off"
+          disabled
+        />
+        <button type="submit" id="send-btn" class="button-primary send-button" disabled>
+          <span>Ask</span>
+          <span class="arrow-icon">→</span>
+        </button>
+      </form>
+    </section>
   </div>
+
+  <!-- Footer (Clay surface-soft warm footer) -->
+  <footer class="app-footer">
+    <div class="footer-container">
+      <p class="footer-pipeline">
+        Pipeline: <strong>PyMuPDF</strong> (Extraction) → <strong>Word Sliding Window</strong> (Chunking) → <strong>Sentence Transformers</strong> (384-D Embeddings) → <strong>ChromaDB</strong> (Vector Index) → <strong>Gemini 2.5 Flash</strong> (Generation)
+      </p>
+      <p class="footer-copyright">
+        Local RAG Educational Architecture • Grounded & Verified
+      </p>
+    </div>
+  </footer>
 
   <script>
     import { marked } from "marked";
 
-    // Configure marked for smooth chat formatting
+    // Configure marked for clean GFM rendering
     marked.use({
       breaks: true,
       gfm: true
@@ -105,13 +132,13 @@
 
     const API_BASE = "http://localhost:8000";
 
-    // State
+    // Application state
     let currentDocument = null;
     let isProcessing = false;
     let isGenerating = false;
     let messages = [];
 
-    // DOM Elements
+    // DOM References
     const docSelect = document.getElementById("doc-select") as HTMLSelectElement;
     const loadBtn = document.getElementById("load-btn") as HTMLButtonElement;
     const docStatusBanner = document.getElementById("doc-status-banner") as HTMLElement;
@@ -124,6 +151,7 @@
     const queryInput = document.getElementById("query-input") as HTMLInputElement;
     const sendBtn = document.getElementById("send-btn") as HTMLButtonElement;
     const clearBtn = document.getElementById("clear-btn") as HTMLButtonElement;
+    const activeDocTag = document.getElementById("active-doc-tag") as HTMLElement;
 
     function showError(msg: string) {
       if (!msg) {
@@ -145,7 +173,7 @@
         const res = await fetch(`${API_BASE}/api/documents`);
         if (!res.ok) throw new Error(`Backend error (${res.status}): Failed to load documents.`);
         const data = await res.json();
-        
+
         docSelect.innerHTML = "";
         if (!data.documents || data.documents.length === 0) {
           docSelect.innerHTML = '<option value="">No PDF files found in documents/</option>';
@@ -188,9 +216,9 @@
       clearError();
 
       // Show indexing status
-      docStatusBanner.className = "status-banner info";
+      docStatusBanner.className = "status-banner info-status";
       docName.textContent = selected;
-      docMeta.textContent = "Processing document: Extracting text, chunking, and embedding in ChromaDB...";
+      docMeta.textContent = "Extracting text, creating chunks, and computing vector embeddings in ChromaDB...";
       docStatusBanner.classList.remove("hidden");
 
       try {
@@ -208,12 +236,16 @@
         const data = await res.json();
         currentDocument = data.name;
 
-        // Update banner to ready
-        docStatusBanner.className = "status-banner success";
+        // Update banner to ready (Clay success treatment)
+        docStatusBanner.className = "status-banner success-status";
         docName.textContent = data.name;
-        docMeta.textContent = `${data.pages} pages • ${data.chunks} chunks • Ready to chat`;
-        
-        // Enable chat
+        docMeta.textContent = `${data.pages} pages • ${data.chunks} chunks • Indexed & Ready`;
+
+        // Update active document badge
+        activeDocTag.textContent = data.name;
+        activeDocTag.classList.remove("hidden");
+
+        // Enable chat inputs
         queryInput.disabled = false;
         queryInput.placeholder = `Ask something about ${data.name}...`;
         sendBtn.disabled = false;
@@ -224,9 +256,9 @@
         renderMessages();
         queryInput.focus();
       } catch (err: any) {
-        docStatusBanner.className = "status-banner error";
+        docStatusBanner.className = "status-banner error-status";
         docName.textContent = selected;
-        docMeta.textContent = "Failed to ingest document";
+        docMeta.textContent = "Document ingestion failed.";
         showError(`Ingestion error: ${err.message}`);
       } finally {
         isProcessing = false;
@@ -235,14 +267,14 @@
       }
     });
 
-    // 3. Chat Messages Rendering with Markdown support
+    // 3. Render Messages with Markdown & Clay Badges
     function renderMessages() {
       if (messages.length === 0) {
         chatMessages.innerHTML = "";
         const welcome = document.createElement("div");
         welcome.className = "empty-state";
         welcome.innerHTML = `
-          <div class="empty-icon">💬</div>
+          <div class="empty-icon-card">💬</div>
           <h3>Ready to Chat</h3>
           <p>Ask a question about <strong>${currentDocument || "the document"}</strong> below.</p>
         `;
@@ -263,13 +295,12 @@
 
         const sender = document.createElement("div");
         sender.className = "message-sender";
-        sender.textContent = msg.role === "user" ? "You" : "Assistant";
+        sender.textContent = msg.role === "user" ? "YOU" : "ASSISTANT";
         bubble.appendChild(sender);
 
         const content = document.createElement("div");
         content.className = "message-content";
-        
-        // Parse markdown for assistant messages, keep plain text for user queries
+
         if (msg.role === "assistant") {
           content.innerHTML = marked.parse(msg.content) as string;
         } else {
@@ -277,11 +308,11 @@
         }
         bubble.appendChild(content);
 
-        // Sources display with clear spacing and badges
+        // Sources tag row
         if (msg.role === "assistant" && msg.sources && msg.sources.length > 0) {
           const sourcesContainer = document.createElement("div");
           sourcesContainer.className = "message-sources";
-          
+
           const label = document.createElement("span");
           label.className = "sources-label";
           label.textContent = "Sources:";
@@ -305,11 +336,10 @@
         chatMessages.appendChild(row);
       });
 
-      // Smooth scroll to bottom
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
-    // Append Thinking bubble
+    // Thinking indicator
     function showThinkingIndicator() {
       const row = document.createElement("div");
       row.className = "message-row assistant thinking-row";
@@ -320,12 +350,12 @@
 
       const sender = document.createElement("div");
       sender.className = "message-sender";
-      sender.textContent = "Assistant";
+      sender.textContent = "ASSISTANT";
       bubble.appendChild(sender);
 
       const content = document.createElement("div");
       content.className = "message-content thinking-text";
-      content.innerHTML = '<span class="pulse-dot"></span> Searching ChromaDB & generating answer...';
+      content.innerHTML = '<span class="pulse-indicator"></span> Searching ChromaDB & synthesizing answer...';
       bubble.appendChild(content);
 
       row.appendChild(bubble);
@@ -338,7 +368,7 @@
       if (indicator) indicator.remove();
     }
 
-    // 4. Send Question to /api/chat
+    // 4. Send Query to Backend
     chatForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       const question = queryInput.value.trim();
@@ -407,30 +437,66 @@
   </script>
 
   <style>
+    /* =====================================================================
+       Clay Design System Tokens (per DESIGN.md)
+       ===================================================================== */
     :root {
-      --bg-color: #0b0f17;
-      --card-bg: #111827;
-      --card-border: #1f2937;
-      --input-bg: #0d131f;
-      --text-main: #f1f5f9;
-      --text-muted: #94a3b8;
-      --text-subtle: #64748b;
-      --primary: #3b82f6;
-      --primary-hover: #2563eb;
-      --primary-border: rgba(59, 130, 246, 0.25);
-      --bubble-user: #1e3a5f;
-      --bubble-assistant: #141c2c;
-      --success-bg: rgba(6, 78, 59, 0.25);
-      --success-border: #059669;
-      --success-text: #34d399;
-      --error-bg: rgba(127, 29, 29, 0.25);
-      --error-border: #dc2626;
-      --error-text: #f87171;
-      --info-bg: rgba(30, 58, 138, 0.2);
-      --info-border: #3b82f6;
-      --info-text: #93c5fd;
+      /* Palette */
+      --colors-primary: #0a0a0a;
+      --colors-primary-active: #1f1f1f;
+      --colors-primary-disabled: #e5e5e5;
+      --colors-ink: #0a0a0a;
+      --colors-body: #3a3a3a;
+      --colors-body-strong: #1a1a1a;
+      --colors-muted: #6a6a6a;
+      --colors-muted-soft: #9a9a9a;
+      --colors-hairline: #e5e5e5;
+      --colors-hairline-soft: #f0f0f0;
+      
+      /* Canvas & Surfaces */
+      --colors-canvas: #fffaf0;            /* Default cream canvas floor */
+      --colors-surface-soft: #faf5e8;      /* Warm pre-footer / footer */
+      --colors-surface-card: #f5f0e0;      /* Cream feature cards */
+      --colors-surface-strong: #ebe6d6;
+      --colors-surface-white: #ffffff;
+      
+      /* Brand saturated cards & accents */
+      --colors-brand-pink: #ff4d8b;
+      --colors-brand-teal: #1a3a3a;
+      --colors-brand-lavender: #b8a4ed;
+      --colors-brand-peach: #ffb084;
+      --colors-brand-ochre: #e8b94a;
+      --colors-brand-mint: #a4d4c5;
+      --colors-brand-coral: #ff6b5a;
+      
+      --colors-on-primary: #ffffff;
+      --colors-on-dark: #ffffff;
+
+      --colors-success: #22c55e;
+      --colors-warning: #f59e0b;
+      --colors-error: #ef4444;
+
+      /* Typography */
       --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       --font-mono: 'JetBrains Mono', monospace;
+
+      /* Border Radii */
+      --rounded-xs: 6px;
+      --rounded-sm: 8px;
+      --rounded-md: 12px;
+      --rounded-lg: 16px;
+      --rounded-xl: 24px;
+      --rounded-pill: 9999px;
+
+      /* Spacing Scale */
+      --spacing-xxs: 4px;
+      --spacing-xs: 8px;
+      --spacing-sm: 12px;
+      --spacing-md: 16px;
+      --spacing-lg: 24px;
+      --spacing-xl: 32px;
+      --spacing-xxl: 48px;
+      --spacing-section: 64px;
     }
 
     * {
@@ -440,87 +506,181 @@
     }
 
     body {
-      background-color: var(--bg-color);
-      color: var(--text-main);
+      background-color: var(--colors-canvas);
+      color: var(--colors-body);
       font-family: var(--font-sans);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      line-height: 1.6;
+      line-height: 1.55;
       -webkit-font-smoothing: antialiased;
     }
 
-    .app-container {
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 2rem 1.5rem;
-      width: 100%;
+    /* Top Navigation (Clay top-nav) */
+    .top-nav {
+      height: 64px;
+      background: var(--colors-canvas);
+      border-bottom: 1px solid var(--colors-hairline);
+      position: sticky;
+      top: 0;
+      z-index: 50;
       display: flex;
-      flex-direction: column;
-      gap: 1.5rem;
-      flex: 1;
+      align-items: center;
     }
 
-    /* Header */
-    .app-header {
-      text-align: center;
-      padding: 1rem 0 0.5rem;
-    }
-
-    .badge {
-      display: inline-block;
-      font-family: var(--font-mono);
-      font-size: 0.72rem;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      color: var(--primary);
-      background: var(--info-bg);
-      border: 1px solid var(--primary-border);
-      padding: 0.25rem 0.65rem;
-      border-radius: 9999px;
-      margin-bottom: 0.75rem;
-    }
-
-    .app-header h1 {
-      font-size: 2.25rem;
-      font-weight: 700;
-      letter-spacing: -0.03em;
-      color: #ffffff;
-      margin-bottom: 0.35rem;
-    }
-
-    .subtitle {
-      font-size: 0.95rem;
-      color: var(--text-muted);
-    }
-
-    /* Cards */
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 12px;
-      padding: 1.25rem 1.5rem;
-    }
-
-    .card-header, .chat-header {
+    .nav-container {
+      max-width: 960px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 0 1.5rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 0.85rem;
     }
 
-    .section-label {
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+    }
+
+    .logo-symbol {
+      font-size: 1.15rem;
+      color: var(--colors-ink);
+    }
+
+    .logo-text {
+      font-size: 1.1rem;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+      color: var(--colors-ink);
+    }
+
+    .nav-right {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .pill-tag {
       font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: var(--colors-muted);
+      background: var(--colors-surface-card);
+      border: 1px solid var(--colors-hairline);
+      padding: 0.25rem 0.65rem;
+      border-radius: var(--rounded-pill);
+    }
+
+    .pill-tag.featured {
+      color: var(--colors-ink);
+      font-weight: 600;
+      background: #faf5e8;
+    }
+
+    /* Layout Container */
+    .app-layout {
+      max-width: 960px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+      flex: 1;
+    }
+
+    /* Hero Band */
+    .hero-band {
+      text-align: left;
+      padding: 0.5rem 0 1rem;
+    }
+
+    .badge-pill {
+      display: inline-block;
+      font-family: var(--font-sans);
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--colors-ink);
+      background: var(--colors-surface-card);
+      border: 1px solid var(--colors-hairline);
+      padding: 0.3rem 0.85rem;
+      border-radius: var(--rounded-pill);
+    }
+
+    .cta-badge {
+      margin-bottom: 1rem;
+    }
+
+    .hero-headline {
+      font-size: 2.75rem;
+      font-weight: 500;
+      line-height: 1.1;
+      letter-spacing: -1.75px;
+      color: var(--colors-ink);
+      margin-bottom: 0.75rem;
+    }
+
+    .hero-subline {
+      font-size: 1.05rem;
+      color: var(--colors-muted);
+      max-width: 620px;
+      line-height: 1.5;
+    }
+
+    /* Content Cards (Clay rounded-xl with hairline border) */
+    .content-card {
+      background: var(--colors-surface-white);
+      border: 1px solid var(--colors-hairline);
+      border-radius: var(--rounded-xl);
+      padding: 1.75rem 2rem;
+      box-shadow: none;
+    }
+
+    .card-top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.25rem;
+    }
+
+    .caption-uppercase {
+      font-family: var(--font-sans);
       font-size: 0.75rem;
       font-weight: 600;
-      letter-spacing: 0.05em;
-      color: var(--text-subtle);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--colors-muted);
+    }
+
+    .card-caption {
+      font-size: 0.82rem;
+      color: var(--colors-muted-soft);
+    }
+
+    .conversation-label-group {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+    }
+
+    .doc-badge {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      background: var(--colors-surface-card);
+      color: var(--colors-body-strong);
+      padding: 0.2rem 0.55rem;
+      border-radius: var(--rounded-sm);
+      border: 1px solid var(--colors-hairline);
     }
 
     /* Document Selector Row */
     .selector-row {
       display: flex;
-      gap: 0.75rem;
+      gap: 0.85rem;
       align-items: center;
     }
 
@@ -531,70 +691,92 @@
 
     select {
       width: 100%;
-      background: var(--input-bg);
-      border: 1px solid var(--card-border);
-      color: var(--text-main);
-      padding: 0.75rem 1rem;
-      border-radius: 8px;
-      font-size: 0.95rem;
-      font-family: inherit;
+      height: 44px;
+      background: var(--colors-canvas);
+      border: 1px solid var(--colors-hairline);
+      color: var(--colors-ink);
+      padding: 0 1rem;
+      border-radius: var(--rounded-md);
+      font-size: 0.94rem;
+      font-family: var(--font-sans);
       outline: none;
       cursor: pointer;
       appearance: none;
-      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233a3a3a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
       background-repeat: no-repeat;
       background-position: right 1rem center;
       background-size: 1em;
+      transition: border-color 0.15s ease;
     }
 
     select:focus {
-      border-color: var(--primary);
+      border-color: var(--colors-ink);
     }
 
-    /* Buttons */
-    .btn {
-      padding: 0.75rem 1.25rem;
-      font-size: 0.9rem;
-      font-weight: 600;
-      border-radius: 8px;
+    select:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* Buttons (Clay button-primary & button-secondary) */
+    .button-primary {
+      height: 44px;
+      padding: 0 1.5rem;
+      background: var(--colors-primary);
+      color: var(--colors-on-primary);
       border: none;
+      border-radius: var(--rounded-md);
+      font-family: var(--font-sans);
+      font-size: 0.88rem;
+      font-weight: 600;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 0.5rem;
-      font-family: inherit;
-      transition: background 0.15s ease, opacity 0.15s ease;
+      transition: background-color 0.15s ease, opacity 0.15s ease;
       white-space: nowrap;
     }
 
-    .btn:disabled {
+    .button-primary:hover:not(:disabled) {
+      background: var(--colors-primary-active);
+    }
+
+    .button-primary:disabled {
+      background: var(--colors-primary-disabled);
+      color: var(--colors-muted);
+      cursor: not-allowed;
+    }
+
+    .button-secondary {
+      height: 36px;
+      padding: 0 1rem;
+      background: var(--colors-canvas);
+      color: var(--colors-ink);
+      border: 1px solid var(--colors-hairline);
+      border-radius: var(--rounded-md);
+      font-family: var(--font-sans);
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.15s ease;
+    }
+
+    .button-secondary:hover:not(:disabled) {
+      background: var(--colors-surface-card);
+    }
+
+    .button-secondary:disabled {
       opacity: 0.5;
       cursor: not-allowed;
     }
 
-    .btn-primary {
-      background: var(--primary);
-      color: #ffffff;
-    }
-
-    .btn-primary:hover:not(:disabled) {
-      background: var(--primary-hover);
-    }
-
-    .btn-secondary {
-      background: #1f2937;
-      color: var(--text-muted);
-      border: 1px solid #374151;
-    }
-
-    .btn-secondary:hover:not(:disabled) {
-      background: #374151;
-      color: #ffffff;
-    }
-
     .btn-sm {
-      padding: 0.4rem 0.75rem;
+      height: 32px;
+      padding: 0 0.85rem;
       font-size: 0.78rem;
     }
 
@@ -602,47 +784,52 @@
     .status-banner {
       display: flex;
       align-items: center;
-      gap: 0.75rem;
-      margin-top: 1rem;
-      padding: 0.85rem 1rem;
-      border-radius: 8px;
-      font-size: 0.88rem;
+      gap: 0.85rem;
+      margin-top: 1.25rem;
+      padding: 1rem 1.25rem;
+      border-radius: var(--rounded-lg);
+      font-size: 0.9rem;
+      border: 1px solid var(--colors-hairline);
     }
 
-    .status-banner.info {
-      background: var(--info-bg);
-      border: 1px solid var(--info-border);
-      color: var(--info-text);
+    .status-banner.info-status {
+      background: #faf5e8;
+      border-color: #ebdcb9;
+      color: #78350f;
     }
 
-    .status-banner.success {
-      background: var(--success-bg);
-      border: 1px solid var(--success-border);
-      color: var(--success-text);
+    .status-banner.success-status {
+      background: #f0fdf4;
+      border-color: #bbf7d0;
+      color: #14532d;
     }
 
-    .status-banner.error {
-      background: var(--error-bg);
-      border: 1px solid var(--error-border);
-      color: var(--error-text);
+    .status-banner.error-status {
+      background: #fef2f2;
+      border-color: #fecaca;
+      color: #991b1b;
     }
 
-    .status-indicator {
+    .status-dot {
       width: 10px;
       height: 10px;
       border-radius: 50%;
       background: currentColor;
     }
 
-    .status-text {
+    .status-content {
       display: flex;
       flex-direction: column;
       gap: 0.15rem;
     }
 
-    .meta-text {
-      font-size: 0.8rem;
-      opacity: 0.85;
+    .meta-description {
+      font-size: 0.82rem;
+      opacity: 0.9;
+    }
+
+    .error-symbol {
+      font-size: 1.15rem;
     }
 
     .hidden {
@@ -651,15 +838,15 @@
 
     /* Chat Section */
     .chat-card {
+      min-height: 520px;
       display: flex;
       flex-direction: column;
-      min-height: 480px;
     }
 
     .chat-messages {
       flex: 1;
       overflow-y: auto;
-      max-height: 450px;
+      max-height: 480px;
       padding: 0.5rem 0;
       display: flex;
       flex-direction: column;
@@ -669,29 +856,39 @@
     .empty-state {
       margin: auto;
       text-align: center;
-      padding: 3rem 1rem;
-      color: var(--text-subtle);
+      padding: 3.5rem 1rem;
+      color: var(--colors-muted);
     }
 
-    .empty-icon {
-      font-size: 2.25rem;
-      margin-bottom: 0.75rem;
-      opacity: 0.7;
+    .empty-icon-card {
+      width: 56px;
+      height: 56px;
+      margin: 0 auto 1rem;
+      background: var(--colors-surface-card);
+      border: 1px solid var(--colors-hairline);
+      border-radius: var(--rounded-lg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
     }
 
     .empty-state h3 {
-      color: var(--text-muted);
-      font-size: 1.05rem;
-      margin-bottom: 0.35rem;
+      color: var(--colors-ink);
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 0.4rem;
+      letter-spacing: -0.3px;
     }
 
     .empty-state p {
-      font-size: 0.85rem;
-      max-width: 320px;
+      font-size: 0.88rem;
+      max-width: 360px;
       margin: 0 auto;
+      line-height: 1.5;
     }
 
-    /* Message Rows */
+    /* Messages Formatting */
     .message-row {
       display: flex;
       width: 100%;
@@ -707,37 +904,36 @@
 
     .message-bubble {
       max-width: 85%;
-      padding: 1rem 1.25rem;
-      border-radius: 12px;
+      padding: 1.15rem 1.4rem;
+      border-radius: var(--rounded-lg);
       font-size: 0.94rem;
       line-height: 1.6;
     }
 
     .message-row.user .message-bubble {
-      background: var(--bubble-user);
-      color: #ffffff;
-      border-bottom-right-radius: 3px;
-      border: 1px solid #2b4c7e;
+      background: var(--colors-brand-teal);
+      color: var(--colors-on-dark);
+      border-bottom-right-radius: var(--rounded-xs);
     }
 
     .message-row.assistant .message-bubble {
-      background: var(--bubble-assistant);
-      color: var(--text-main);
-      border-bottom-left-radius: 3px;
-      border: 1px solid #1e293b;
+      background: var(--colors-canvas);
+      color: var(--colors-ink);
+      border: 1px solid var(--colors-hairline);
+      border-bottom-left-radius: var(--rounded-xs);
     }
 
     .message-sender {
-      font-family: var(--font-mono);
-      font-size: 0.7rem;
-      font-weight: 600;
+      font-family: var(--font-sans);
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 1px;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
       margin-bottom: 0.45rem;
-      opacity: 0.6;
+      opacity: 0.65;
     }
 
-    /* Rich Markdown Styles inside Assistant Message */
+    /* Rich Markdown Output inside Assistant Bubble */
     .message-content {
       word-break: break-word;
     }
@@ -752,34 +948,45 @@
 
     .message-content ul,
     .message-content ol {
-      padding-left: 1.4rem;
+      padding-left: 1.35rem;
       margin-bottom: 0.75rem;
     }
 
     .message-content li {
       margin-bottom: 0.35rem;
-      line-height: 1.6;
+      line-height: 1.55;
     }
 
     .message-content strong,
     .message-content b {
       font-weight: 600;
+      color: var(--colors-ink);
+    }
+
+    .message-row.user .message-content strong {
       color: #ffffff;
     }
 
     .message-content code {
       font-family: var(--font-mono);
-      background: rgba(255, 255, 255, 0.08);
+      background: var(--colors-surface-card);
+      color: var(--colors-brand-pink);
       padding: 0.15rem 0.4rem;
-      border-radius: 4px;
+      border-radius: var(--rounded-xs);
       font-size: 0.88em;
-      color: #93c5fd;
+      border: 1px solid var(--colors-hairline);
+    }
+
+    .message-row.user .message-content code {
+      background: rgba(255, 255, 255, 0.15);
+      color: #ffffff;
+      border: none;
     }
 
     .message-content pre {
-      background: #090d16;
-      border: 1px solid #1e293b;
-      border-radius: 8px;
+      background: var(--colors-surface-dark);
+      color: #f1f5f9;
+      border-radius: var(--rounded-md);
       padding: 0.85rem 1rem;
       margin: 0.65rem 0;
       overflow-x: auto;
@@ -787,23 +994,16 @@
 
     .message-content pre code {
       background: transparent;
+      color: inherit;
+      border: none;
       padding: 0;
-      color: #e2e8f0;
     }
 
-    .message-content blockquote {
-      border-left: 3px solid var(--primary);
-      padding-left: 0.85rem;
-      margin: 0.5rem 0;
-      color: var(--text-muted);
-      font-style: italic;
-    }
-
-    /* Sources tags */
+    /* Sources Badges (Clay Pill Tag treatment) */
     .message-sources {
-      margin-top: 0.9rem;
+      margin-top: 1rem;
       padding-top: 0.75rem;
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      border-top: 1px solid var(--colors-hairline);
       display: flex;
       flex-wrap: wrap;
       align-items: center;
@@ -811,12 +1011,12 @@
     }
 
     .sources-label {
-      color: var(--text-subtle);
-      font-family: var(--font-mono);
+      color: var(--colors-muted);
+      font-family: var(--font-sans);
       font-size: 0.72rem;
-      font-weight: 600;
+      font-weight: 700;
+      letter-spacing: 1px;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
       margin-right: 0.2rem;
     }
 
@@ -827,83 +1027,122 @@
     }
 
     .source-tag {
-      background: rgba(59, 130, 246, 0.12);
-      color: #93c5fd;
-      border: 1px solid rgba(59, 130, 246, 0.3);
-      padding: 0.2rem 0.55rem;
-      border-radius: 6px;
+      background: var(--colors-surface-card);
+      color: var(--colors-ink);
+      border: 1px solid var(--colors-hairline);
+      padding: 0.2rem 0.65rem;
+      border-radius: var(--rounded-pill);
       font-family: var(--font-mono);
-      font-size: 0.75rem;
-      font-weight: 500;
-      letter-spacing: 0.02em;
+      font-size: 0.74rem;
+      font-weight: 600;
       display: inline-flex;
       align-items: center;
     }
 
-    /* Thinking pulse */
-    .pulse-dot {
+    /* Thinking State */
+    .pulse-indicator {
       display: inline-block;
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: var(--primary);
+      background: var(--colors-brand-ochre);
       margin-right: 0.4rem;
-      animation: pulse 1.2s infinite ease-in-out;
+      animation: pulseAnim 1.2s infinite ease-in-out;
     }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 0.3; transform: scale(0.8); }
-      50% { opacity: 1; transform: scale(1.1); }
+    @keyframes pulseAnim {
+      0%, 100% { opacity: 0.4; transform: scale(0.85); }
+      50% { opacity: 1; transform: scale(1.15); }
     }
 
-    /* Input Form */
+    /* Chat Input Form */
     .chat-input-form {
-      margin-top: 1rem;
+      margin-top: 1.25rem;
       display: flex;
-      gap: 0.65rem;
-      border-top: 1px solid var(--card-border);
-      padding-top: 1rem;
+      gap: 0.75rem;
+      border-top: 1px solid var(--colors-hairline);
+      padding-top: 1.25rem;
     }
 
-    .chat-input {
+    .text-input {
       flex: 1;
-      background: var(--input-bg);
-      border: 1px solid var(--card-border);
-      color: var(--text-main);
-      padding: 0.8rem 1rem;
-      border-radius: 8px;
+      height: 46px;
+      background: var(--colors-canvas);
+      border: 1px solid var(--colors-hairline);
+      color: var(--colors-ink);
+      padding: 0 1.15rem;
+      border-radius: var(--rounded-md);
       font-size: 0.94rem;
-      font-family: inherit;
+      font-family: var(--font-sans);
       outline: none;
+      transition: border-color 0.15s ease;
     }
 
-    .chat-input:focus:not(:disabled) {
-      border-color: var(--primary);
+    .text-input:focus:not(:disabled) {
+      border-color: var(--colors-ink);
     }
 
-    .chat-input:disabled {
-      opacity: 0.5;
+    .text-input:disabled {
+      opacity: 0.6;
       cursor: not-allowed;
     }
 
-    /* Footer */
+    .send-button {
+      height: 46px;
+      padding: 0 1.4rem;
+    }
+
+    .arrow-icon {
+      font-size: 1.1rem;
+      line-height: 1;
+    }
+
+    /* Footer (Clay surface-soft) */
     .app-footer {
+      background: var(--colors-surface-soft);
+      border-top: 1px solid var(--colors-hairline);
+      padding: 2.5rem 1.5rem;
+      margin-top: auto;
+    }
+
+    .footer-container {
+      max-width: 960px;
+      margin: 0 auto;
       text-align: center;
-      padding: 1rem 0;
-      color: var(--text-subtle);
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .footer-pipeline {
+      font-size: 0.82rem;
+      color: var(--colors-muted);
+      line-height: 1.6;
+    }
+
+    .footer-pipeline strong {
+      color: var(--colors-body-strong);
+    }
+
+    .footer-copyright {
       font-size: 0.75rem;
+      color: var(--colors-muted-soft);
       font-family: var(--font-mono);
     }
 
-    @media (max-width: 640px) {
-      .app-container {
-        padding: 1rem;
+    /* Responsive */
+    @media (max-width: 768px) {
+      .hero-headline {
+        font-size: 2rem;
       }
       .selector-row {
         flex-direction: column;
       }
-      .btn {
+      .button-primary {
         width: 100%;
+      }
+      .content-card {
+        padding: 1.25rem;
       }
       .message-bubble {
         max-width: 95%;
