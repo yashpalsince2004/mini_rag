@@ -10,7 +10,7 @@
   <title>Mini RAG — PDF Chatbot</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
   <div class="app-container">
@@ -37,7 +37,6 @@
           </div>
           <button id="load-btn" class="btn btn-primary" disabled>
             <span class="btn-text">Load Document</span>
-            <span class="btn-spinner hidden"></span>
           </button>
         </div>
 
@@ -96,6 +95,14 @@
   </div>
 
   <script>
+    import { marked } from "marked";
+
+    // Configure marked for smooth chat formatting
+    marked.use({
+      breaks: true,
+      gfm: true
+    });
+
     const API_BASE = "http://localhost:8000";
 
     // State
@@ -105,21 +112,20 @@
     let messages = [];
 
     // DOM Elements
-    const docSelect = document.getElementById("doc-select");
-    const loadBtn = document.getElementById("load-btn");
-    const docStatusBanner = document.getElementById("doc-status-banner");
-    const docName = document.getElementById("doc-name");
-    const docMeta = document.getElementById("doc-meta");
-    const errorBanner = document.getElementById("error-banner");
-    const errorMessage = document.getElementById("error-message");
-    const chatMessages = document.getElementById("chat-messages");
-    const emptyState = document.getElementById("empty-state");
-    const chatForm = document.getElementById("chat-form");
-    const queryInput = document.getElementById("query-input");
-    const sendBtn = document.getElementById("send-btn");
-    const clearBtn = document.getElementById("clear-btn");
+    const docSelect = document.getElementById("doc-select") as HTMLSelectElement;
+    const loadBtn = document.getElementById("load-btn") as HTMLButtonElement;
+    const docStatusBanner = document.getElementById("doc-status-banner") as HTMLElement;
+    const docName = document.getElementById("doc-name") as HTMLElement;
+    const docMeta = document.getElementById("doc-meta") as HTMLElement;
+    const errorBanner = document.getElementById("error-banner") as HTMLElement;
+    const errorMessage = document.getElementById("error-message") as HTMLElement;
+    const chatMessages = document.getElementById("chat-messages") as HTMLElement;
+    const chatForm = document.getElementById("chat-form") as HTMLFormElement;
+    const queryInput = document.getElementById("query-input") as HTMLInputElement;
+    const sendBtn = document.getElementById("send-btn") as HTMLButtonElement;
+    const clearBtn = document.getElementById("clear-btn") as HTMLButtonElement;
 
-    function showError(msg) {
+    function showError(msg: string) {
       if (!msg) {
         errorBanner.classList.add("hidden");
         return;
@@ -153,7 +159,7 @@
         defaultOption.textContent = "Select a PDF...";
         docSelect.appendChild(defaultOption);
 
-        data.documents.forEach((doc) => {
+        data.documents.forEach((doc: { name: string }) => {
           const opt = document.createElement("option");
           opt.value = doc.name;
           opt.textContent = doc.name;
@@ -161,7 +167,7 @@
         });
 
         docSelect.disabled = false;
-      } catch (err) {
+      } catch (err: any) {
         docSelect.innerHTML = '<option value="">Cannot connect to backend</option>';
         showError(`Backend connection failed: Make sure FastAPI is running on ${API_BASE}. (${err.message})`);
       }
@@ -217,7 +223,7 @@
         messages = [];
         renderMessages();
         queryInput.focus();
-      } catch (err) {
+      } catch (err: any) {
         docStatusBanner.className = "status-banner error";
         docName.textContent = selected;
         docMeta.textContent = "Failed to ingest document";
@@ -229,7 +235,7 @@
       }
     });
 
-    // 3. Chat Messages Rendering
+    // 3. Chat Messages Rendering with Markdown support
     function renderMessages() {
       if (messages.length === 0) {
         chatMessages.innerHTML = "";
@@ -248,7 +254,7 @@
       clearBtn.disabled = false;
       chatMessages.innerHTML = "";
 
-      messages.forEach((msg) => {
+      messages.forEach((msg: { role: string; content: string; sources?: number[] }) => {
         const row = document.createElement("div");
         row.className = `message-row ${msg.role}`;
 
@@ -262,26 +268,36 @@
 
         const content = document.createElement("div");
         content.className = "message-content";
-        content.textContent = msg.content;
+        
+        // Parse markdown for assistant messages, keep plain text for user queries
+        if (msg.role === "assistant") {
+          content.innerHTML = marked.parse(msg.content) as string;
+        } else {
+          content.textContent = msg.content;
+        }
         bubble.appendChild(content);
 
-        // Sources display
+        // Sources display with clear spacing and badges
         if (msg.role === "assistant" && msg.sources && msg.sources.length > 0) {
           const sourcesContainer = document.createElement("div");
           sourcesContainer.className = "message-sources";
           
           const label = document.createElement("span");
           label.className = "sources-label";
-          label.textContent = "Sources: ";
+          label.textContent = "Sources:";
           sourcesContainer.appendChild(label);
 
-          msg.sources.forEach((page) => {
+          const tagsWrapper = document.createElement("div");
+          tagsWrapper.className = "source-tags-wrapper";
+
+          msg.sources.forEach((page: number) => {
             const tag = document.createElement("span");
             tag.className = "source-tag";
             tag.textContent = `Page ${page}`;
-            sourcesContainer.appendChild(tag);
+            tagsWrapper.appendChild(tag);
           });
 
+          sourcesContainer.appendChild(tagsWrapper);
           bubble.appendChild(sourcesContainer);
         }
 
@@ -289,7 +305,7 @@
         chatMessages.appendChild(row);
       });
 
-      // Scroll to bottom
+      // Smooth scroll to bottom
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
@@ -309,7 +325,7 @@
 
       const content = document.createElement("div");
       content.className = "message-content thinking-text";
-      content.innerHTML = '<span class="pulse-dot"></span> Thinking and retrieving context...';
+      content.innerHTML = '<span class="pulse-dot"></span> Searching ChromaDB & generating answer...';
       bubble.appendChild(content);
 
       row.appendChild(bubble);
@@ -362,7 +378,7 @@
           content: data.answer,
           sources: data.sources || []
         });
-      } catch (err) {
+      } catch (err: any) {
         removeThinkingIndicator();
         messages.push({
           role: "assistant",
@@ -396,24 +412,24 @@
       --card-bg: #111827;
       --card-border: #1f2937;
       --input-bg: #0d131f;
-      --text-main: #f3f4f6;
-      --text-muted: #9ca3af;
-      --text-subtle: #6b7280;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --text-subtle: #64748b;
       --primary: #3b82f6;
       --primary-hover: #2563eb;
-      --primary-border: #60a5fa33;
+      --primary-border: rgba(59, 130, 246, 0.25);
       --bubble-user: #1e3a5f;
-      --bubble-assistant: #162032;
-      --success-bg: #064e3b33;
+      --bubble-assistant: #141c2c;
+      --success-bg: rgba(6, 78, 59, 0.25);
       --success-border: #059669;
       --success-text: #34d399;
-      --error-bg: #7f1d1d33;
+      --error-bg: rgba(127, 29, 29, 0.25);
       --error-border: #dc2626;
       --error-text: #f87171;
-      --info-bg: #1e3a8a22;
+      --info-bg: rgba(30, 58, 138, 0.2);
       --info-border: #3b82f6;
       --info-text: #93c5fd;
-      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       --font-mono: 'JetBrains Mono', monospace;
     }
 
@@ -430,7 +446,8 @@
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      line-height: 1.5;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
     }
 
     .app-container {
@@ -646,7 +663,7 @@
       padding: 0.5rem 0;
       display: flex;
       flex-direction: column;
-      gap: 1rem;
+      gap: 1.25rem;
     }
 
     .empty-state {
@@ -689,25 +706,25 @@
     }
 
     .message-bubble {
-      max-width: 80%;
-      padding: 0.9rem 1.15rem;
-      border-radius: 10px;
-      font-size: 0.92rem;
-      line-height: 1.55;
+      max-width: 85%;
+      padding: 1rem 1.25rem;
+      border-radius: 12px;
+      font-size: 0.94rem;
+      line-height: 1.6;
     }
 
     .message-row.user .message-bubble {
       background: var(--bubble-user);
       color: #ffffff;
-      border-bottom-right-radius: 2px;
+      border-bottom-right-radius: 3px;
       border: 1px solid #2b4c7e;
     }
 
     .message-row.assistant .message-bubble {
       background: var(--bubble-assistant);
       color: var(--text-main);
-      border-bottom-left-radius: 2px;
-      border: 1px solid #1f2b3e;
+      border-bottom-left-radius: 3px;
+      border: 1px solid #1e293b;
     }
 
     .message-sender {
@@ -715,41 +732,112 @@
       font-size: 0.7rem;
       font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 0.35rem;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.45rem;
       opacity: 0.6;
     }
 
+    /* Rich Markdown Styles inside Assistant Message */
     .message-content {
-      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .message-content p {
+      margin-bottom: 0.65rem;
+    }
+
+    .message-content p:last-child {
+      margin-bottom: 0;
+    }
+
+    .message-content ul,
+    .message-content ol {
+      padding-left: 1.4rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .message-content li {
+      margin-bottom: 0.35rem;
+      line-height: 1.6;
+    }
+
+    .message-content strong,
+    .message-content b {
+      font-weight: 600;
+      color: #ffffff;
+    }
+
+    .message-content code {
+      font-family: var(--font-mono);
+      background: rgba(255, 255, 255, 0.08);
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.88em;
+      color: #93c5fd;
+    }
+
+    .message-content pre {
+      background: #090d16;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+      margin: 0.65rem 0;
+      overflow-x: auto;
+    }
+
+    .message-content pre code {
+      background: transparent;
+      padding: 0;
+      color: #e2e8f0;
+    }
+
+    .message-content blockquote {
+      border-left: 3px solid var(--primary);
+      padding-left: 0.85rem;
+      margin: 0.5rem 0;
+      color: var(--text-muted);
+      font-style: italic;
     }
 
     /* Sources tags */
     .message-sources {
-      margin-top: 0.75rem;
-      padding-top: 0.6rem;
-      border-top: 1px solid #1f2937;
+      margin-top: 0.9rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 0.4rem;
-      font-size: 0.76rem;
+      gap: 0.5rem;
     }
 
     .sources-label {
       color: var(--text-subtle);
       font-family: var(--font-mono);
       font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-right: 0.2rem;
+    }
+
+    .source-tags-wrapper {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
     }
 
     .source-tag {
-      background: #1f2937;
+      background: rgba(59, 130, 246, 0.12);
       color: #93c5fd;
-      border: 1px solid #374151;
-      padding: 0.15rem 0.45rem;
-      border-radius: 4px;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      padding: 0.2rem 0.55rem;
+      border-radius: 6px;
       font-family: var(--font-mono);
-      font-size: 0.72rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      display: inline-flex;
+      align-items: center;
     }
 
     /* Thinking pulse */
@@ -782,9 +870,9 @@
       background: var(--input-bg);
       border: 1px solid var(--card-border);
       color: var(--text-main);
-      padding: 0.75rem 1rem;
+      padding: 0.8rem 1rem;
       border-radius: 8px;
-      font-size: 0.92rem;
+      font-size: 0.94rem;
       font-family: inherit;
       outline: none;
     }
@@ -818,7 +906,7 @@
         width: 100%;
       }
       .message-bubble {
-        max-width: 92%;
+        max-width: 95%;
       }
     }
   </style>
