@@ -14,6 +14,12 @@ __pycache__/
 # Vector database storage
 chroma_db/
 
+# Frontend & Node
+frontend/node_modules/
+frontend/dist/
+frontend/.astro/
+node_modules/
+
 # macOS / OS files
 .DS_Store
 Thumbs.db

@@ -1,0 +1,826 @@
+---
+// Mini RAG - Astro Frontend
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mini RAG — PDF Chatbot</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-content">
+        <div class="badge">EDUCATIONAL RAG</div>
+        <h1>Mini RAG</h1>
+        <p class="subtitle">Ask questions about your PDF with local ChromaDB retrieval and Gemini</p>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <!-- Document Selection Card -->
+      <section class="card selection-card">
+        <div class="card-header">
+          <span class="section-label">SELECT DOCUMENT</span>
+        </div>
+        <div class="selector-row">
+          <div class="select-wrapper">
+            <select id="doc-select" disabled>
+              <option value="">Loading available PDFs...</option>
+            </select>
+          </div>
+          <button id="load-btn" class="btn btn-primary" disabled>
+            <span class="btn-text">Load Document</span>
+            <span class="btn-spinner hidden"></span>
+          </button>
+        </div>
+
+        <!-- Status & Document Info -->
+        <div id="doc-status-banner" class="status-banner info hidden">
+          <div class="status-indicator"></div>
+          <div class="status-text">
+            <strong id="doc-name">No document selected</strong>
+            <span id="doc-meta" class="meta-text">Select a PDF to start chatting</span>
+          </div>
+        </div>
+
+        <!-- Error Notification -->
+        <div id="error-banner" class="status-banner error hidden">
+          <span class="error-icon">⚠️</span>
+          <span id="error-message">An error occurred</span>
+        </div>
+      </section>
+
+      <!-- Chat Section -->
+      <section class="card chat-card">
+        <div class="chat-header">
+          <span class="section-label">CONVERSATION</span>
+          <button id="clear-btn" class="btn btn-secondary btn-sm" disabled>Clear Chat</button>
+        </div>
+
+        <!-- Messages Area -->
+        <div id="chat-messages" class="chat-messages">
+          <div id="empty-state" class="empty-state">
+            <div class="empty-icon">📄</div>
+            <h3>No Document Loaded</h3>
+            <p>Select a PDF file above and click <strong>Load Document</strong> to initialize the RAG vector index.</p>
+          </div>
+        </div>
+
+        <!-- Chat Input Form -->
+        <form id="chat-form" class="chat-input-form">
+          <input
+            type="text"
+            id="query-input"
+            class="chat-input"
+            placeholder="Select a document first..."
+            autocomplete="off"
+            disabled
+          />
+          <button type="submit" id="send-btn" class="btn btn-primary send-btn" disabled>
+            <span>Send</span>
+          </button>
+        </form>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <span>Pipeline: PyMuPDF → Word Chunking → Sentence Transformers (all-MiniLM-L6-v2) → ChromaDB → Gemini 2.5 Flash</span>
+    </footer>
+  </div>
+
+  <script>
+    const API_BASE = "http://localhost:8000";
+
+    // State
+    let currentDocument = null;
+    let isProcessing = false;
+    let isGenerating = false;
+    let messages = [];
+
+    // DOM Elements
+    const docSelect = document.getElementById("doc-select");
+    const loadBtn = document.getElementById("load-btn");
+    const docStatusBanner = document.getElementById("doc-status-banner");
+    const docName = document.getElementById("doc-name");
+    const docMeta = document.getElementById("doc-meta");
+    const errorBanner = document.getElementById("error-banner");
+    const errorMessage = document.getElementById("error-message");
+    const chatMessages = document.getElementById("chat-messages");
+    const emptyState = document.getElementById("empty-state");
+    const chatForm = document.getElementById("chat-form");
+    const queryInput = document.getElementById("query-input");
+    const sendBtn = document.getElementById("send-btn");
+    const clearBtn = document.getElementById("clear-btn");
+
+    function showError(msg) {
+      if (!msg) {
+        errorBanner.classList.add("hidden");
+        return;
+      }
+      errorMessage.textContent = msg;
+      errorBanner.classList.remove("hidden");
+    }
+
+    function clearError() {
+      errorBanner.classList.add("hidden");
+    }
+
+    // 1. Fetch available documents from FastAPI
+    async function fetchDocuments() {
+      try {
+        clearError();
+        const res = await fetch(`${API_BASE}/api/documents`);
+        if (!res.ok) throw new Error(`Backend error (${res.status}): Failed to load documents.`);
+        const data = await res.json();
+        
+        docSelect.innerHTML = "";
+        if (!data.documents || data.documents.length === 0) {
+          docSelect.innerHTML = '<option value="">No PDF files found in documents/</option>';
+          docSelect.disabled = true;
+          loadBtn.disabled = true;
+          return;
+        }
+
+        const defaultOption = document.createElement("option");
+        defaultOption.value = "";
+        defaultOption.textContent = "Select a PDF...";
+        docSelect.appendChild(defaultOption);
+
+        data.documents.forEach((doc) => {
+          const opt = document.createElement("option");
+          opt.value = doc.name;
+          opt.textContent = doc.name;
+          docSelect.appendChild(opt);
+        });
+
+        docSelect.disabled = false;
+      } catch (err) {
+        docSelect.innerHTML = '<option value="">Cannot connect to backend</option>';
+        showError(`Backend connection failed: Make sure FastAPI is running on ${API_BASE}. (${err.message})`);
+      }
+    }
+
+    docSelect.addEventListener("change", () => {
+      loadBtn.disabled = !docSelect.value || isProcessing;
+    });
+
+    // 2. Select & Ingest Document
+    loadBtn.addEventListener("click", async () => {
+      const selected = docSelect.value;
+      if (!selected || isProcessing) return;
+
+      isProcessing = true;
+      loadBtn.disabled = true;
+      docSelect.disabled = true;
+      clearError();
+
+      // Show indexing status
+      docStatusBanner.className = "status-banner info";
+      docName.textContent = selected;
+      docMeta.textContent = "Processing document: Extracting text, chunking, and embedding in ChromaDB...";
+      docStatusBanner.classList.remove("hidden");
+
+      try {
+        const res = await fetch(`${API_BASE}/api/documents/select`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename: selected })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || `Server error (${res.status})`);
+        }
+
+        const data = await res.json();
+        currentDocument = data.name;
+
+        // Update banner to ready
+        docStatusBanner.className = "status-banner success";
+        docName.textContent = data.name;
+        docMeta.textContent = `${data.pages} pages • ${data.chunks} chunks • Ready to chat`;
+        
+        // Enable chat
+        queryInput.disabled = false;
+        queryInput.placeholder = `Ask something about ${data.name}...`;
+        sendBtn.disabled = false;
+        clearBtn.disabled = false;
+
+        // Reset chat for new document
+        messages = [];
+        renderMessages();
+        queryInput.focus();
+      } catch (err) {
+        docStatusBanner.className = "status-banner error";
+        docName.textContent = selected;
+        docMeta.textContent = "Failed to ingest document";
+        showError(`Ingestion error: ${err.message}`);
+      } finally {
+        isProcessing = false;
+        docSelect.disabled = false;
+        loadBtn.disabled = !docSelect.value;
+      }
+    });
+
+    // 3. Chat Messages Rendering
+    function renderMessages() {
+      if (messages.length === 0) {
+        chatMessages.innerHTML = "";
+        const welcome = document.createElement("div");
+        welcome.className = "empty-state";
+        welcome.innerHTML = `
+          <div class="empty-icon">💬</div>
+          <h3>Ready to Chat</h3>
+          <p>Ask a question about <strong>${currentDocument || "the document"}</strong> below.</p>
+        `;
+        chatMessages.appendChild(welcome);
+        clearBtn.disabled = true;
+        return;
+      }
+
+      clearBtn.disabled = false;
+      chatMessages.innerHTML = "";
+
+      messages.forEach((msg) => {
+        const row = document.createElement("div");
+        row.className = `message-row ${msg.role}`;
+
+        const bubble = document.createElement("div");
+        bubble.className = "message-bubble";
+
+        const sender = document.createElement("div");
+        sender.className = "message-sender";
+        sender.textContent = msg.role === "user" ? "You" : "Assistant";
+        bubble.appendChild(sender);
+
+        const content = document.createElement("div");
+        content.className = "message-content";
+        content.textContent = msg.content;
+        bubble.appendChild(content);
+
+        // Sources display
+        if (msg.role === "assistant" && msg.sources && msg.sources.length > 0) {
+          const sourcesContainer = document.createElement("div");
+          sourcesContainer.className = "message-sources";
+          
+          const label = document.createElement("span");
+          label.className = "sources-label";
+          label.textContent = "Sources: ";
+          sourcesContainer.appendChild(label);
+
+          msg.sources.forEach((page) => {
+            const tag = document.createElement("span");
+            tag.className = "source-tag";
+            tag.textContent = `Page ${page}`;
+            sourcesContainer.appendChild(tag);
+          });
+
+          bubble.appendChild(sourcesContainer);
+        }
+
+        row.appendChild(bubble);
+        chatMessages.appendChild(row);
+      });
+
+      // Scroll to bottom
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // Append Thinking bubble
+    function showThinkingIndicator() {
+      const row = document.createElement("div");
+      row.className = "message-row assistant thinking-row";
+      row.id = "thinking-indicator";
+
+      const bubble = document.createElement("div");
+      bubble.className = "message-bubble thinking-bubble";
+
+      const sender = document.createElement("div");
+      sender.className = "message-sender";
+      sender.textContent = "Assistant";
+      bubble.appendChild(sender);
+
+      const content = document.createElement("div");
+      content.className = "message-content thinking-text";
+      content.innerHTML = '<span class="pulse-dot"></span> Thinking and retrieving context...';
+      bubble.appendChild(content);
+
+      row.appendChild(bubble);
+      chatMessages.appendChild(row);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function removeThinkingIndicator() {
+      const indicator = document.getElementById("thinking-indicator");
+      if (indicator) indicator.remove();
+    }
+
+    // 4. Send Question to /api/chat
+    chatForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const question = queryInput.value.trim();
+      if (!question || isGenerating || !currentDocument) return;
+
+      isGenerating = true;
+      queryInput.value = "";
+      queryInput.disabled = true;
+      sendBtn.disabled = true;
+      clearError();
+
+      // Push user message
+      messages.push({ role: "user", content: question });
+      renderMessages();
+      showThinkingIndicator();
+
+      try {
+        const res = await fetch(`${API_BASE}/api/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filename: currentDocument,
+            question: question
+          })
+        });
+
+        removeThinkingIndicator();
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || `Server error (${res.status})`);
+        }
+
+        const data = await res.json();
+        messages.push({
+          role: "assistant",
+          content: data.answer,
+          sources: data.sources || []
+        });
+      } catch (err) {
+        removeThinkingIndicator();
+        messages.push({
+          role: "assistant",
+          content: `⚠️ Request failed: ${err.message}`,
+          sources: []
+        });
+        showError(`Chat error: ${err.message}`);
+      } finally {
+        isGenerating = false;
+        renderMessages();
+        queryInput.disabled = false;
+        sendBtn.disabled = false;
+        queryInput.focus();
+      }
+    });
+
+    // 5. Clear Chat
+    clearBtn.addEventListener("click", () => {
+      messages = [];
+      renderMessages();
+      clearError();
+    });
+
+    // Initial load
+    fetchDocuments();
+  </script>
+
+  <style>
+    :root {
+      --bg-color: #0b0f17;
+      --card-bg: #111827;
+      --card-border: #1f2937;
+      --input-bg: #0d131f;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --text-subtle: #6b7280;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --primary-border: #60a5fa33;
+      --bubble-user: #1e3a5f;
+      --bubble-assistant: #162032;
+      --success-bg: #064e3b33;
+      --success-border: #059669;
+      --success-text: #34d399;
+      --error-bg: #7f1d1d33;
+      --error-border: #dc2626;
+      --error-text: #f87171;
+      --info-bg: #1e3a8a22;
+      --info-border: #3b82f6;
+      --info-text: #93c5fd;
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.5;
+    }
+
+    .app-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      flex: 1;
+    }
+
+    /* Header */
+    .app-header {
+      text-align: center;
+      padding: 1rem 0 0.5rem;
+    }
+
+    .badge {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: var(--primary);
+      background: var(--info-bg);
+      border: 1px solid var(--primary-border);
+      padding: 0.25rem 0.65rem;
+      border-radius: 9999px;
+      margin-bottom: 0.75rem;
+    }
+
+    .app-header h1 {
+      font-size: 2.25rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      color: #ffffff;
+      margin-bottom: 0.35rem;
+    }
+
+    .subtitle {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+    }
+
+    /* Cards */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+    }
+
+    .card-header, .chat-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.85rem;
+    }
+
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: var(--text-subtle);
+    }
+
+    /* Document Selector Row */
+    .selector-row {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .select-wrapper {
+      flex: 1;
+      position: relative;
+    }
+
+    select {
+      width: 100%;
+      background: var(--input-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: right 1rem center;
+      background-size: 1em;
+    }
+
+    select:focus {
+      border-color: var(--primary);
+    }
+
+    /* Buttons */
+    .btn {
+      padding: 0.75rem 1.25rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      font-family: inherit;
+      transition: background 0.15s ease, opacity 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #ffffff;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--primary-hover);
+    }
+
+    .btn-secondary {
+      background: #1f2937;
+      color: var(--text-muted);
+      border: 1px solid #374151;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: #374151;
+      color: #ffffff;
+    }
+
+    .btn-sm {
+      padding: 0.4rem 0.75rem;
+      font-size: 0.78rem;
+    }
+
+    /* Status Banners */
+    .status-banner {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-top: 1rem;
+      padding: 0.85rem 1rem;
+      border-radius: 8px;
+      font-size: 0.88rem;
+    }
+
+    .status-banner.info {
+      background: var(--info-bg);
+      border: 1px solid var(--info-border);
+      color: var(--info-text);
+    }
+
+    .status-banner.success {
+      background: var(--success-bg);
+      border: 1px solid var(--success-border);
+      color: var(--success-text);
+    }
+
+    .status-banner.error {
+      background: var(--error-bg);
+      border: 1px solid var(--error-border);
+      color: var(--error-text);
+    }
+
+    .status-indicator {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .status-text {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+
+    .meta-text {
+      font-size: 0.8rem;
+      opacity: 0.85;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Chat Section */
+    .chat-card {
+      display: flex;
+      flex-direction: column;
+      min-height: 480px;
+    }
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      max-height: 450px;
+      padding: 0.5rem 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .empty-state {
+      margin: auto;
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--text-subtle);
+    }
+
+    .empty-icon {
+      font-size: 2.25rem;
+      margin-bottom: 0.75rem;
+      opacity: 0.7;
+    }
+
+    .empty-state h3 {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+      margin-bottom: 0.35rem;
+    }
+
+    .empty-state p {
+      font-size: 0.85rem;
+      max-width: 320px;
+      margin: 0 auto;
+    }
+
+    /* Message Rows */
+    .message-row {
+      display: flex;
+      width: 100%;
+    }
+
+    .message-row.user {
+      justify-content: flex-end;
+    }
+
+    .message-row.assistant {
+      justify-content: flex-start;
+    }
+
+    .message-bubble {
+      max-width: 80%;
+      padding: 0.9rem 1.15rem;
+      border-radius: 10px;
+      font-size: 0.92rem;
+      line-height: 1.55;
+    }
+
+    .message-row.user .message-bubble {
+      background: var(--bubble-user);
+      color: #ffffff;
+      border-bottom-right-radius: 2px;
+      border: 1px solid #2b4c7e;
+    }
+
+    .message-row.assistant .message-bubble {
+      background: var(--bubble-assistant);
+      color: var(--text-main);
+      border-bottom-left-radius: 2px;
+      border: 1px solid #1f2b3e;
+    }
+
+    .message-sender {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.35rem;
+      opacity: 0.6;
+    }
+
+    .message-content {
+      white-space: pre-wrap;
+    }
+
+    /* Sources tags */
+    .message-sources {
+      margin-top: 0.75rem;
+      padding-top: 0.6rem;
+      border-top: 1px solid #1f2937;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.76rem;
+    }
+
+    .sources-label {
+      color: var(--text-subtle);
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+    }
+
+    .source-tag {
+      background: #1f2937;
+      color: #93c5fd;
+      border: 1px solid #374151;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+    }
+
+    /* Thinking pulse */
+    .pulse-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--primary);
+      margin-right: 0.4rem;
+      animation: pulse 1.2s infinite ease-in-out;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.3; transform: scale(0.8); }
+      50% { opacity: 1; transform: scale(1.1); }
+    }
+
+    /* Input Form */
+    .chat-input-form {
+      margin-top: 1rem;
+      display: flex;
+      gap: 0.65rem;
+      border-top: 1px solid var(--card-border);
+      padding-top: 1rem;
+    }
+
+    .chat-input {
+      flex: 1;
+      background: var(--input-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      font-size: 0.92rem;
+      font-family: inherit;
+      outline: none;
+    }
+
+    .chat-input:focus:not(:disabled) {
+      border-color: var(--primary);
+    }
+
+    .chat-input:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Footer */
+    .app-footer {
+      text-align: center;
+      padding: 1rem 0;
+      color: var(--text-subtle);
+      font-size: 0.75rem;
+      font-family: var(--font-mono);
+    }
+
+    @media (max-width: 640px) {
+      .app-container {
+        padding: 1rem;
+      }
+      .selector-row {
+        flex-direction: column;
+      }
+      .btn {
+        width: 100%;
+      }
+      .message-bubble {
+        max-width: 92%;
+      }
+    }
+  </style>
+</body>
+</html>
