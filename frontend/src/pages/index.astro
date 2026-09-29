@@ -1,5 +1,5 @@
 ---
-// Mini RAG - Astro Frontend (Clay Design System)
+// Mini RAG - Astro Frontend (Clay Dark Theme)
 ---
 
 <!DOCTYPE html>
@@ -13,7 +13,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
-  <!-- Top Navigation (Clay top-nav) -->
+  <!-- Top Navigation (Clay Dark top-nav) -->
   <header class="top-nav">
     <div class="nav-container">
       <div class="nav-brand">
@@ -38,7 +38,7 @@
       </p>
     </section>
 
-    <!-- Document Selection Card -->
+    <!-- Document Selection Card (Clay surface-dark-elevated) -->
     <section class="content-card document-card">
       <div class="card-top-row">
         <span class="caption-uppercase">SELECT DOCUMENT</span>
@@ -56,7 +56,7 @@
         </button>
       </div>
 
-      <!-- Status Banner (Clay feature card styling) -->
+      <!-- Status Banner -->
       <div id="doc-status-banner" class="status-banner info-status hidden">
         <div class="status-dot"></div>
         <div class="status-content">
@@ -109,7 +109,7 @@
     </section>
   </div>
 
-  <!-- Footer (Clay surface-soft warm footer) -->
+  <!-- Footer (Clay surface-dark) -->
   <footer class="app-footer">
     <div class="footer-container">
       <p class="footer-pipeline">
@@ -236,7 +236,7 @@
         const data = await res.json();
         currentDocument = data.name;
 
-        // Update banner to ready (Clay success treatment)
+        // Update banner to ready
         docStatusBanner.className = "status-banner success-status";
         docName.textContent = data.name;
         docMeta.textContent = `${data.pages} pages • ${data.chunks} chunks • Indexed & Ready`;
@@ -267,7 +267,7 @@
       }
     });
 
-    // 3. Render Messages with Markdown & Clay Badges
+    // 3. Render Messages with Markdown & Dark Badges
     function renderMessages() {
       if (messages.length === 0) {
         chatMessages.innerHTML = "";
@@ -438,65 +438,48 @@
 
   <style>
     /* =====================================================================
-       Clay Design System Tokens (per DESIGN.md)
+       Clay Dark Design System Tokens (per DESIGN.md dark theme instructions)
        ===================================================================== */
     :root {
-      /* Palette */
-      --colors-primary: #0a0a0a;
-      --colors-primary-active: #1f1f1f;
-      --colors-primary-disabled: #e5e5e5;
-      --colors-ink: #0a0a0a;
-      --colors-body: #3a3a3a;
-      --colors-body-strong: #1a1a1a;
-      --colors-muted: #6a6a6a;
-      --colors-muted-soft: #9a9a9a;
-      --colors-hairline: #e5e5e5;
-      --colors-hairline-soft: #f0f0f0;
+      /* Dark Theme Surfaces from DESIGN.md */
+      --colors-surface-dark: #0a1a1a;          /* Dark teal-tinted near-black floor */
+      --colors-surface-dark-elevated: #142424; /* Elevated dark card surface */
+      --colors-surface-dark-card: #182a2a;     /* Slightly elevated card surface */
+      --colors-surface-dark-input: #0e1e1e;    /* Input field surface */
       
-      /* Canvas & Surfaces */
-      --colors-canvas: #fffaf0;            /* Default cream canvas floor */
-      --colors-surface-soft: #faf5e8;      /* Warm pre-footer / footer */
-      --colors-surface-card: #f5f0e0;      /* Cream feature cards */
-      --colors-surface-strong: #ebe6d6;
-      --colors-surface-white: #ffffff;
+      /* Dark Hairline Borders */
+      --colors-hairline: #223636;
+      --colors-hairline-subtle: #1b2c2c;
+      --colors-hairline-focus: #385555;
       
-      /* Brand saturated cards & accents */
-      --colors-brand-pink: #ff4d8b;
-      --colors-brand-teal: #1a3a3a;
-      --colors-brand-lavender: #b8a4ed;
-      --colors-brand-peach: #ffb084;
-      --colors-brand-ochre: #e8b94a;
-      --colors-brand-mint: #a4d4c5;
-      --colors-brand-coral: #ff6b5a;
-      
-      --colors-on-primary: #ffffff;
+      /* Typography Colors on Dark */
       --colors-on-dark: #ffffff;
-
+      --colors-on-dark-body: #e0e8e8;
+      --colors-on-dark-soft: #a0a0a0;
+      --colors-on-dark-muted: #748888;
+      
+      /* Brand Accents from DESIGN.md */
+      --colors-brand-teal: #1a3a3a;            /* Deep teal */
+      --colors-brand-pink: #ff4d8b;            /* Hot pink accent */
+      --colors-brand-lavender: #b8a4ed;        /* Soft lavender */
+      --colors-brand-peach: #ffb084;          /* Warm peach */
+      --colors-brand-ochre: #e8b94a;          /* Mustard / ochre */
+      --colors-brand-mint: #a4d4c5;           /* Mint highlight */
+      
       --colors-success: #22c55e;
-      --colors-warning: #f59e0b;
       --colors-error: #ef4444;
 
       /* Typography */
       --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       --font-mono: 'JetBrains Mono', monospace;
 
-      /* Border Radii */
+      /* Border Radii (DESIGN.md scale) */
       --rounded-xs: 6px;
       --rounded-sm: 8px;
       --rounded-md: 12px;
       --rounded-lg: 16px;
       --rounded-xl: 24px;
       --rounded-pill: 9999px;
-
-      /* Spacing Scale */
-      --spacing-xxs: 4px;
-      --spacing-xs: 8px;
-      --spacing-sm: 12px;
-      --spacing-md: 16px;
-      --spacing-lg: 24px;
-      --spacing-xl: 32px;
-      --spacing-xxl: 48px;
-      --spacing-section: 64px;
     }
 
     * {
@@ -506,8 +489,8 @@
     }
 
     body {
-      background-color: var(--colors-canvas);
-      color: var(--colors-body);
+      background-color: var(--colors-surface-dark);
+      color: var(--colors-on-dark-body);
       font-family: var(--font-sans);
       min-height: 100vh;
       display: flex;
@@ -516,10 +499,10 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    /* Top Navigation (Clay top-nav) */
+    /* Top Navigation (Clay Dark top-nav) */
     .top-nav {
       height: 64px;
-      background: var(--colors-canvas);
+      background: var(--colors-surface-dark);
       border-bottom: 1px solid var(--colors-hairline);
       position: sticky;
       top: 0;
@@ -546,14 +529,14 @@
 
     .logo-symbol {
       font-size: 1.15rem;
-      color: var(--colors-ink);
+      color: var(--colors-brand-mint);
     }
 
     .logo-text {
       font-size: 1.1rem;
       font-weight: 600;
       letter-spacing: -0.5px;
-      color: var(--colors-ink);
+      color: var(--colors-on-dark);
     }
 
     .nav-right {
@@ -566,17 +549,18 @@
       font-family: var(--font-mono);
       font-size: 0.72rem;
       font-weight: 500;
-      color: var(--colors-muted);
-      background: var(--colors-surface-card);
+      color: var(--colors-on-dark-soft);
+      background: var(--colors-surface-dark-elevated);
       border: 1px solid var(--colors-hairline);
       padding: 0.25rem 0.65rem;
       border-radius: var(--rounded-pill);
     }
 
     .pill-tag.featured {
-      color: var(--colors-ink);
+      color: var(--colors-brand-mint);
+      border-color: #2b4c4c;
       font-weight: 600;
-      background: #faf5e8;
+      background: #112828;
     }
 
     /* Layout Container */
@@ -594,7 +578,7 @@
     /* Hero Band */
     .hero-band {
       text-align: left;
-      padding: 0.5rem 0 1rem;
+      padding: 0.5rem 0 0.5rem;
     }
 
     .badge-pill {
@@ -604,9 +588,9 @@
       font-weight: 600;
       letter-spacing: 1.2px;
       text-transform: uppercase;
-      color: var(--colors-ink);
-      background: var(--colors-surface-card);
-      border: 1px solid var(--colors-hairline);
+      color: var(--colors-brand-mint);
+      background: #122828;
+      border: 1px solid #264545;
       padding: 0.3rem 0.85rem;
       border-radius: var(--rounded-pill);
     }
@@ -620,20 +604,20 @@
       font-weight: 500;
       line-height: 1.1;
       letter-spacing: -1.75px;
-      color: var(--colors-ink);
+      color: var(--colors-on-dark);
       margin-bottom: 0.75rem;
     }
 
     .hero-subline {
       font-size: 1.05rem;
-      color: var(--colors-muted);
+      color: var(--colors-on-dark-soft);
       max-width: 620px;
       line-height: 1.5;
     }
 
-    /* Content Cards (Clay rounded-xl with hairline border) */
+    /* Content Cards (Clay rounded-xl with dark hairlines) */
     .content-card {
-      background: var(--colors-surface-white);
+      background: var(--colors-surface-dark-elevated);
       border: 1px solid var(--colors-hairline);
       border-radius: var(--rounded-xl);
       padding: 1.75rem 2rem;
@@ -653,12 +637,12 @@
       font-weight: 600;
       letter-spacing: 1.5px;
       text-transform: uppercase;
-      color: var(--colors-muted);
+      color: var(--colors-on-dark-muted);
     }
 
     .card-caption {
       font-size: 0.82rem;
-      color: var(--colors-muted-soft);
+      color: var(--colors-on-dark-muted);
     }
 
     .conversation-label-group {
@@ -670,8 +654,8 @@
     .doc-badge {
       font-family: var(--font-mono);
       font-size: 0.72rem;
-      background: var(--colors-surface-card);
-      color: var(--colors-body-strong);
+      background: var(--colors-surface-dark);
+      color: var(--colors-brand-mint);
       padding: 0.2rem 0.55rem;
       border-radius: var(--rounded-sm);
       border: 1px solid var(--colors-hairline);
@@ -692,9 +676,9 @@
     select {
       width: 100%;
       height: 44px;
-      background: var(--colors-canvas);
+      background: var(--colors-surface-dark-input);
       border: 1px solid var(--colors-hairline);
-      color: var(--colors-ink);
+      color: var(--colors-on-dark);
       padding: 0 1rem;
       border-radius: var(--rounded-md);
       font-size: 0.94rem;
@@ -702,7 +686,7 @@
       outline: none;
       cursor: pointer;
       appearance: none;
-      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233a3a3a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a0a0a0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
       background-repeat: no-repeat;
       background-position: right 1rem center;
       background-size: 1em;
@@ -710,20 +694,20 @@
     }
 
     select:focus {
-      border-color: var(--colors-ink);
+      border-color: var(--colors-brand-mint);
     }
 
     select:disabled {
-      opacity: 0.6;
+      opacity: 0.5;
       cursor: not-allowed;
     }
 
-    /* Buttons (Clay button-primary & button-secondary) */
+    /* Buttons (Clay Dark button-primary & button-secondary) */
     .button-primary {
       height: 44px;
       padding: 0 1.5rem;
-      background: var(--colors-primary);
-      color: var(--colors-on-primary);
+      background: var(--colors-on-dark);
+      color: var(--colors-surface-dark);
       border: none;
       border-radius: var(--rounded-md);
       font-family: var(--font-sans);
@@ -739,20 +723,20 @@
     }
 
     .button-primary:hover:not(:disabled) {
-      background: var(--colors-primary-active);
+      background: #e5f0f0;
     }
 
     .button-primary:disabled {
-      background: var(--colors-primary-disabled);
-      color: var(--colors-muted);
+      background: #1f3030;
+      color: var(--colors-on-dark-muted);
       cursor: not-allowed;
     }
 
     .button-secondary {
       height: 36px;
       padding: 0 1rem;
-      background: var(--colors-canvas);
-      color: var(--colors-ink);
+      background: var(--colors-surface-dark-input);
+      color: var(--colors-on-dark-body);
       border: 1px solid var(--colors-hairline);
       border-radius: var(--rounded-md);
       font-family: var(--font-sans);
@@ -766,11 +750,12 @@
     }
 
     .button-secondary:hover:not(:disabled) {
-      background: var(--colors-surface-card);
+      background: var(--colors-surface-dark);
+      border-color: var(--colors-hairline-focus);
     }
 
     .button-secondary:disabled {
-      opacity: 0.5;
+      opacity: 0.4;
       cursor: not-allowed;
     }
 
@@ -780,7 +765,7 @@
       font-size: 0.78rem;
     }
 
-    /* Status Banners */
+    /* Status Banners (Dark Clay Accents) */
     .status-banner {
       display: flex;
       align-items: center;
@@ -789,25 +774,25 @@
       padding: 1rem 1.25rem;
       border-radius: var(--rounded-lg);
       font-size: 0.9rem;
-      border: 1px solid var(--colors-hairline);
+      border: 1px solid transparent;
     }
 
     .status-banner.info-status {
-      background: #faf5e8;
-      border-color: #ebdcb9;
-      color: #78350f;
+      background: #112626;
+      border-color: #1e3f3f;
+      color: #9fe2d4;
     }
 
     .status-banner.success-status {
-      background: #f0fdf4;
-      border-color: #bbf7d0;
-      color: #14532d;
+      background: #0d2820;
+      border-color: #154536;
+      color: #4ade80;
     }
 
     .status-banner.error-status {
-      background: #fef2f2;
-      border-color: #fecaca;
-      color: #991b1b;
+      background: #2b1114;
+      border-color: #4a1d22;
+      color: #f87171;
     }
 
     .status-dot {
@@ -825,7 +810,7 @@
 
     .meta-description {
       font-size: 0.82rem;
-      opacity: 0.9;
+      opacity: 0.85;
     }
 
     .error-symbol {
@@ -857,24 +842,25 @@
       margin: auto;
       text-align: center;
       padding: 3.5rem 1rem;
-      color: var(--colors-muted);
+      color: var(--colors-on-dark-muted);
     }
 
     .empty-icon-card {
       width: 56px;
       height: 56px;
       margin: 0 auto 1rem;
-      background: var(--colors-surface-card);
+      background: var(--colors-surface-dark-input);
       border: 1px solid var(--colors-hairline);
       border-radius: var(--rounded-lg);
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 1.5rem;
+      color: var(--colors-brand-mint);
     }
 
     .empty-state h3 {
-      color: var(--colors-ink);
+      color: var(--colors-on-dark);
       font-size: 1.1rem;
       font-weight: 600;
       margin-bottom: 0.4rem;
@@ -910,15 +896,18 @@
       line-height: 1.6;
     }
 
+    /* User Bubble (Clay brand-teal) */
     .message-row.user .message-bubble {
       background: var(--colors-brand-teal);
-      color: var(--colors-on-dark);
+      border: 1px solid #295555;
+      color: #ffffff;
       border-bottom-right-radius: var(--rounded-xs);
     }
 
+    /* Assistant Bubble (Elevated dark card) */
     .message-row.assistant .message-bubble {
-      background: var(--colors-canvas);
-      color: var(--colors-ink);
+      background: var(--colors-surface-dark-input);
+      color: var(--colors-on-dark-body);
       border: 1px solid var(--colors-hairline);
       border-bottom-left-radius: var(--rounded-xs);
     }
@@ -933,7 +922,7 @@
       opacity: 0.65;
     }
 
-    /* Rich Markdown Output inside Assistant Bubble */
+    /* Rich Markdown Output inside Bubble */
     .message-content {
       word-break: break-word;
     }
@@ -960,17 +949,13 @@
     .message-content strong,
     .message-content b {
       font-weight: 600;
-      color: var(--colors-ink);
-    }
-
-    .message-row.user .message-content strong {
-      color: #ffffff;
+      color: var(--colors-on-dark);
     }
 
     .message-content code {
       font-family: var(--font-mono);
-      background: var(--colors-surface-card);
-      color: var(--colors-brand-pink);
+      background: #172a2a;
+      color: var(--colors-brand-mint);
       padding: 0.15rem 0.4rem;
       border-radius: var(--rounded-xs);
       font-size: 0.88em;
@@ -984,8 +969,9 @@
     }
 
     .message-content pre {
-      background: var(--colors-surface-dark);
-      color: #f1f5f9;
+      background: #061111;
+      border: 1px solid var(--colors-hairline);
+      color: #e0f2f1;
       border-radius: var(--rounded-md);
       padding: 0.85rem 1rem;
       margin: 0.65rem 0;
@@ -999,7 +985,7 @@
       padding: 0;
     }
 
-    /* Sources Badges (Clay Pill Tag treatment) */
+    /* Sources Badges (Dark Clay Pill Tags) */
     .message-sources {
       margin-top: 1rem;
       padding-top: 0.75rem;
@@ -1011,7 +997,7 @@
     }
 
     .sources-label {
-      color: var(--colors-muted);
+      color: var(--colors-on-dark-muted);
       font-family: var(--font-sans);
       font-size: 0.72rem;
       font-weight: 700;
@@ -1027,9 +1013,9 @@
     }
 
     .source-tag {
-      background: var(--colors-surface-card);
-      color: var(--colors-ink);
-      border: 1px solid var(--colors-hairline);
+      background: #112828;
+      color: var(--colors-brand-mint);
+      border: 1px solid #234848;
       padding: 0.2rem 0.65rem;
       border-radius: var(--rounded-pill);
       font-family: var(--font-mono);
@@ -1067,9 +1053,9 @@
     .text-input {
       flex: 1;
       height: 46px;
-      background: var(--colors-canvas);
+      background: var(--colors-surface-dark-input);
       border: 1px solid var(--colors-hairline);
-      color: var(--colors-ink);
+      color: var(--colors-on-dark);
       padding: 0 1.15rem;
       border-radius: var(--rounded-md);
       font-size: 0.94rem;
@@ -1079,11 +1065,11 @@
     }
 
     .text-input:focus:not(:disabled) {
-      border-color: var(--colors-ink);
+      border-color: var(--colors-brand-mint);
     }
 
     .text-input:disabled {
-      opacity: 0.6;
+      opacity: 0.5;
       cursor: not-allowed;
     }
 
@@ -1097,9 +1083,9 @@
       line-height: 1;
     }
 
-    /* Footer (Clay surface-soft) */
+    /* Footer (Clay surface-dark) */
     .app-footer {
-      background: var(--colors-surface-soft);
+      background: var(--colors-surface-dark);
       border-top: 1px solid var(--colors-hairline);
       padding: 2.5rem 1.5rem;
       margin-top: auto;
@@ -1116,17 +1102,17 @@
 
     .footer-pipeline {
       font-size: 0.82rem;
-      color: var(--colors-muted);
+      color: var(--colors-on-dark-muted);
       line-height: 1.6;
     }
 
     .footer-pipeline strong {
-      color: var(--colors-body-strong);
+      color: var(--colors-on-dark-soft);
     }
 
     .footer-copyright {
       font-size: 0.75rem;
-      color: var(--colors-muted-soft);
+      color: #4b6363;
       font-family: var(--font-mono);
     }
 
