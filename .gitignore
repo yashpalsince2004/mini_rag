@@ -23,6 +23,3 @@ node_modules/
 # macOS / OS files
 .DS_Store
 Thumbs.db
-
-# Design docs
-DESIGN.md

@@ -21,7 +21,11 @@ load_dotenv()
 # =====================================================================
 # Configuration
 # =====================================================================
-PDF_PATH = "Cambridge_21.pdf"
+DOCS_DIR = os.path.join(os.path.dirname(__file__), "documents")
+DEFAULT_PDF = os.path.join(DOCS_DIR, "Cambridge_21.pdf") if os.path.exists(os.path.join(DOCS_DIR, "Cambridge_21.pdf")) else (
+    os.path.join(DOCS_DIR, "document.pdf") if os.path.exists(os.path.join(DOCS_DIR, "document.pdf")) else "Cambridge_21.pdf"
+)
+PDF_PATH = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_PDF
 CHROMA_PATH = "./chroma_db"
 COLLECTION_NAME = "pdf_documents"
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"

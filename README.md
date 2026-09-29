@@ -260,6 +260,7 @@ mini_rag/
 │   ├── Cambridge_21.pdf     # Sample IELTS test book (144 pages)
 │   └── document.pdf         # Sample ML concepts document (3 pages)
 │
+├── main.py                  # Terminal CLI interactive chatbot runner
 ├── chroma_db/               # Persistent ChromaDB vector database directory
 ├── .env                     # Secrets (GEMINI_API_KEY, GEMINI_MODEL)
 ├── .env.example             # Template for environment variables
