@@ -355,10 +355,47 @@ def main():
             print("Goodbye!")
             break
 
+        # Jev Decision 1 & 2: Query Routing & Retrieval Gating
+        try:
+            from backend.jev_decisions import classify_query_intent, evaluate_context_sufficiency
+            routing = classify_query_intent(query, filename=os.path.basename(PDF_PATH))
+        except Exception:
+            routing = None
+
+        if routing and routing.query_type == "greeting":
+            print("\nAssistant:")
+            print("Hello! Ask me anything about the loaded PDF.")
+            continue
+
+        if routing and routing.query_type == "help":
+            print("\nAssistant:")
+            print("Type any question about the contents of the document. I will retrieve verified facts and answer.")
+            continue
+
+        if routing and routing.query_type == "unsupported":
+            print("\nAssistant:")
+            print("I can only answer questions based on the loaded PDF document.")
+            continue
+
         # Stage 1: Retrieval (Question -> Embedding -> ChromaDB -> Retrieved chunks)
+        print(f"\n[RAG] Searching ChromaDB for: '{query}'")
         retrieved_chunks = retrieve(query, collection, embedding_model, top_k=TOP_K)
+        print(f"[RAG] Retrieved {len(retrieved_chunks)} chunks.")
+
+        # Jev Decision 3 & 4: Retrieval Quality & Generation Gating
+        if routing:
+            chunks_data = [
+                {"text": c.get("text", ""), "page": c.get("page", 0), "distance": c.get("distance", None)}
+                for c in retrieved_chunks
+            ]
+            context_decision = evaluate_context_sufficiency(query, chunks_data, filename=os.path.basename(PDF_PATH))
+            if not context_decision.should_generate:
+                print("\nAssistant:")
+                print("I couldn't find enough information about that in the selected PDF.")
+                continue
 
         # Stage 2: Generation (Question + Retrieved chunks -> Gemini -> Answer)
+        print(f"[LLM] Context verified. Generating answer with {gemini_model}...")
         answer, sources = generate_answer(query, retrieved_chunks, gemini_client, model_name=gemini_model)
 
         print("\nAssistant:")

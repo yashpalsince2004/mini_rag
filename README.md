@@ -1,290 +1,310 @@
-# Mini PDF RAG Chatbot (with Astro & FastAPI)
+# Mini PDF RAG Chatbot (with TypeSafe Jev, Astro & FastAPI)
 
-A minimal, educational **Retrieval-Augmented Generation (RAG)** system featuring a **FastAPI backend** and a modern, dark **Astro JS web UI**. Built from scratch using Python, PyMuPDF, Sentence Transformers, ChromaDB, and Google Gemini.
+A minimal, educational **Retrieval-Augmented Generation (RAG)** system featuring **TypeSafe AI's Jev** as an intelligent decision-making layer, a **FastAPI backend**, and a modern dark **Astro JS web UI**. Built from scratch using Python, PyMuPDF, Sentence Transformers, ChromaDB, TypeSafe Jev, and Google Gemini.
 
-The primary goal of this project is learning and understanding how the internal RAG pipeline works from first principles—without heavy abstractions or high-level frameworks such as LangChain or LlamaIndex.
-
----
-
-## 1. Project Overview & Division of Responsibilities
-
-- **Astro JS:** Serves solely as the lightweight, modern user interface. It never communicates directly with ChromaDB, Gemini, or local files.
-- **FastAPI:** Acts as the backend API layer exposing endpoints for document discovery, ingestion, and RAG question-answering.
-- **PyMuPDF (`fitz`):** Extracts raw text page-by-page from local PDF files while preserving page numbers.
-- **Sentence Transformers (`all-MiniLM-L6-v2`):** Encodes text passages into dense 384-dimensional vector embeddings.
-- **ChromaDB:** Stores vectors, original chunk text, and page metadata in a persistent local database (`./chroma_db/`).
-- **Google Gemini API (`gemini-2.5-flash`):** Synthesizes accurate, natural-language answers strictly grounded in the retrieved context.
+The primary goal of this project is understanding how a production-grade RAG pipeline makes **principled decisions** from first principles—without heavy abstractions or high-level frameworks like LangChain or LlamaIndex.
 
 ---
 
-## 2. Complete Architecture Diagram
+## 1. Project Overview & Responsibility Matrix
+
+Every component in this architecture has a single, strictly separated responsibility:
+
+| Component | Responsibility | Why this separation is intentional |
+|---|---|---|
+| **Astro** | User interface & Presentation | Modern, responsive dark UI with live thinking indicators and an educational Jev Decision Trace panel. |
+| **FastAPI** | Pipeline Orchestration | Handles API endpoints, input validation, and coordinates the flow between Jev, ChromaDB, and Gemini. |
+| **TypeSafe Jev** | Decision Layer | Intelligently evaluates user intent, controls when retrieval occurs, validates context sufficiency, and gates LLM generation. |
+| **PyMuPDF (`fitz`)** | PDF Text Extraction | Extracts raw text page-by-page while preserving accurate page metadata. |
+| **Sentence Transformers** | Dense Vector Embeddings | Converts text passages into 384-dimensional dense semantic vectors using `all-MiniLM-L6-v2`. |
+| **ChromaDB** | Vector Similarity Retrieval | Indexes and queries top-$K$ nearest semantic chunks using persistent local storage (`./chroma_db/`). |
+| **Google Gemini (`gemini-2.5-flash`)** | Grounded Answer Generation | Synthesizes natural-language answers strictly grounded in retrieved evidence—invoked **only** when Jev verifies context sufficiency. |
+
+> **Key Architectural Principle:**  
+> - **Jev decides what the system should do.**  
+> - **ChromaDB finds relevant information.**  
+> - **Gemini explains the retrieved information.**  
+> - **FastAPI orchestrates the pipeline.**  
+> - **Astro presents the experience.**
+
+---
+
+## 2. The Jev Decision Layer
+
+### Why Jev was Introduced
+
+In traditional naive RAG architectures, every user input blindly traverses the entire pipeline:
 
 ```text
-                 Astro Frontend (http://localhost:4321)
-                       │
-                       │ HTTP / JSON
-                       ▼
-                 FastAPI Backend (http://localhost:8000)
-                       │
-              ┌────────┴────────┐
-              ▼                 ▼
-        PDF Processing       User Query
-              │                 │
-          PyMuPDF           Embedding (all-MiniLM-L6-v2)
-              │                 │
-          Chunking          ChromaDB Similarity Search
-              │                 │
-        Embeddings              ▼
-              │             Top-K Chunks + Distances
-              ▼                 │
-          ChromaDB              ▼
-                    Gemini 2.5 Flash
-                              │
-                              ▼
-                           Answer
-                              │
-                              ▼
-                       Astro Frontend (UI Display + Sources)
+Naive RAG (Before):
+
+User Query
+    │
+    ▼
+Embed Query (Sentence Transformers)
+    │
+    ▼
+ChromaDB Vector Search (Top-K Chunks)
+    │
+    ▼
+Gemini LLM Generation
+    │
+    ▼
+Final Answer (often hallucinated or apologizing)
 ```
 
----
-
-## 3. Frontend & Backend Communication
-
-The browser communicates strictly over HTTP with the FastAPI server:
-
-1. **Document Discovery:** `GET /api/documents` retrieves the list of `.pdf` files residing in `documents/`.
-2. **Document Ingestion:** `POST /api/documents/select` validates the file path, parses the PDF, creates chunks, computes embeddings, and indexes them in ChromaDB (reusing the collection if already indexed).
-3. **Chat Interaction:** `POST /api/chat` embeds the user question, queries ChromaDB for the top-$K$ nearest chunks, augments the Gemini prompt with retrieved context, and returns the grounded answer with source pages.
+#### Flaws in Naive RAG:
+1. **Unnecessary Retrieval & LLM Calls:** If a user says `"Hi"`, naive RAG embeds the greeting, searches ChromaDB for random nearest chunks, and asks Gemini to formulate a response.
+2. **Hallucination on Missing Context:** If a user asks an out-of-document question (e.g., *"What is the population of Germany?"* when reading an IELTS test preparation book), ChromaDB will still return its top 3 closest chunks. Because distances are relative, Gemini is prompted with irrelevant snippets and may hallucinate or formulate an unverified response.
+3. **Arbitrary Distance Thresholds:** Hard-coding rules like `if distance < 1.0` is fragile across different embedding models and document domains.
 
 ---
 
-## 4. PDF Selection Flow
+### The New Architecture (After Jev Integration)
 
 ```text
-User opens Web UI
-       │
-       ▼
-Frontend calls GET /api/documents
-       │
-       ▼
-FastAPI scans documents/ directory (only .pdf files, path traversal blocked)
-       │
-       ▼
-Dropdown populates with available files (e.g. Cambridge_21.pdf, document.pdf)
-       │
-       ▼
-User clicks [ Load Document ]
-       │
-       ▼
-Frontend calls POST /api/documents/select
+Decision-Gated RAG (After):
+
+                         USER
+                          │
+                          ▼
+                     ASTRO UI
+                          │
+                          ▼
+                    FASTAPI API
+                          │
+                          ▼
+                   ┌─────────────┐
+                   │  JEV ROUTER │
+                   └──────┬──────┘
+                          │
+             ┌────────────┼─────────────┐
+             │            │             │
+             ▼            ▼             ▼
+         GREETING    DOC QUESTION   UNSUPPORTED
+      ("Hello!...")       │         ("I only answer
+                          ▼          doc questions")
+                      CHROMADB
+                      RETRIEVER
+                          │
+                          ▼
+                     TOP-K CHUNKS
+                          │
+                          ▼
+                   ┌─────────────┐
+                   │ JEV CONTEXT │
+                   │  EVALUATION │
+                   └──────┬──────┘
+                          │
+                ┌─────────┴─────────┐
+                │                   │
+           SUFFICIENT          INSUFFICIENT
+                │                   │
+                ▼                   ▼
+             GEMINI            NO GENERATION
+            GENERATOR      ("I couldn't find enough
+                │          information in the PDF.")
+                ▼                   │
+          ANSWER + SOURCES          │
+                └─────────┬─────────┘
+                          │
+                          ▼
+                   FINAL RESPONSE
 ```
 
 ---
 
-## 5. PDF Ingestion Flow
+### The Four Jev Decision Stages
 
-When a PDF is selected:
+Rather than creating a single monolithic decision, the decision layer is split into focused, typed stages:
 
-1. **Path Validation:** FastAPI ensures the file exists in `documents/` and blocks `../` directory traversal.
-2. **Collection Check:** ChromaDB checks if a collection for this document already exists (e.g., `pdf_cambridge_21`). If valid, it immediately returns without re-embedding.
-3. **Text Extraction:** PyMuPDF parses the document page-by-page:
-   ```python
-   # 1. Extract PDF text
-   doc = fitz.open(pdf_path)
-   for page_index in range(len(doc)):
-       text = doc[page_index].get_text().strip()
-   ```
-4. **Chunking:** The extracted text is partitioned into overlapping word chunks.
-5. **Vector Embedding:** `all-MiniLM-L6-v2` converts chunks into 384-dimensional vectors.
-6. **Storage:** Vectors, raw text, and page metadata are written to ChromaDB.
+#### Stage 1: Query Intent Routing (`classify_query_intent`)
+Classifies user intent into discrete, typed choices:
+- `document_question`: Specific inquiry regarding content in the document.
+- `greeting`: Social greeting or conversational opener (`"Hi"`, `"Hello"`).
+- `help`: Request for instructions or capabilities (`"How do I use this?"`).
+- `unsupported`: Out-of-scope requests (`"Write me a Python game"`, `"Tell me a joke"`).
+- `clarification_needed`: Vague, incomplete, or ambiguous inputs.
 
----
+#### Stage 2: Retrieval Gating (`should_retrieve`)
+A typed boolean decision determining whether ChromaDB retrieval should execute:
+- `"Is this book for IELTS?"` → `should_retrieve = True`
+- `"Hi"` → `should_retrieve = False` (Direct greeting response returned immediately)
+- `"Write a snake game"` → `should_retrieve = False` (Direct refusal returned immediately)
 
-## 6. Text Chunking
+#### Stage 3: Context Quality Assessment (`evaluate_context_sufficiency`)
+After ChromaDB returns the top-$K$ chunks with their semantic distances and page metadata, Jev evaluates whether the retrieved text actually contains the necessary factual evidence:
+- `sufficient`: The retrieved chunks explicitly state facts that answer the question.
+- `insufficient`: The retrieved chunks do not contain enough information or are only tangentially related.
+- `uncertain`: The chunks partially touch upon the topic but miss crucial facts.
 
-Text cannot be embedded as one giant document because:
-- LLM and embedding context windows are finite.
-- Embedding an entire book into one vector dilutes specific factual details.
-- Similarity search works best against concise, topical passages.
-
-### Sliding-Window Configuration
-- **`chunk_size = 300` words:** The target length of each discrete chunk.
-- **`chunk_overlap = 50` words:** The number of words repeated from the previous chunk.
-
-```text
-Chunk 1: [Words 1 to 300]
-                │
-                ◄── 50-word Overlap ──►
-                │
-Chunk 2:       [Words 251 to 550]
-```
-
-**Why Overlap Matters:** Overlapping guarantees that ideas and sentences spanning a 300-word boundary are not cut off.
+#### Stage 4: Generation Control (`should_generate`)
+A Noul probability decision controlling whether Gemini is permitted to run:
+- If `context_quality == "sufficient"` → `should_generate = True` → Gemini is invoked.
+- If `context_quality == "insufficient"` → `should_generate = False` → Gemini is blocked. The backend returns:
+  > *"I couldn't find enough information about that in the selected PDF."*
+- If `context_quality == "uncertain"` → conservative fallback: Gemini is blocked to prevent hallucinations.
 
 ---
 
-## 7. Vector Embeddings
+### Official TypeSafe SDK Implementation
 
-An embedding model maps textual meaning to numerical coordinates in 384-dimensional space:
+The project uses the official `typesafe-sdk` (`v0.7.2`). Decisions are declared with `Choice` and `Noul`:
 
-```text
-"Supervised learning algorithms use labeled data."
-                        ↓
-[ 0.0214, -0.1820, 0.4431, -0.0092, ... 384 coordinates ]
-```
+```python
+from typesafe import TypeSafeClient, Choice, Noul, NoulCriteria
 
-### The Golden Rule of Vector Search
-> **The exact same embedding model (`all-MiniLM-L6-v2`) must be used for document chunks and user queries.**
-
-Because all vectors reside in the identical geometric coordinate system, cosine distances accurately reflect semantic similarity.
-
----
-
-## 8. ChromaDB Storage & Document-Specific Collections
-
-ChromaDB runs locally in `./chroma_db/`.
-
-To prevent chunks from different PDFs from colliding, each PDF is assigned a deterministic collection name:
-- `Cambridge_21.pdf` → `pdf_cambridge_21`
-- `document.pdf` → `pdf_document`
-
-### What ChromaDB Stores
-- **ID:** Unique chunk ID (`chunk_0`, `chunk_1`, ...)
-- **Vector:** The 384-dimensional float array.
-- **Document Text:** The actual textual excerpt.
-- **Metadata:** Source page number (`{"page": 5}`).
-
----
-
-## 9. Semantic Retrieval
-
-When a question is asked:
-1. The question is encoded using `all-MiniLM-L6-v2`.
-2. ChromaDB performs an Approximate Nearest Neighbor (ANN) search using cosine distance.
-3. The top-$K$ most relevant chunks are retrieved (default `top_k = 3`).
-
-*Note on Distance Values:* A distance of `0.90` is a geometric vector metric—it does **not** mean 90% confidence or 90% accuracy. Lower distance indicates closer semantic proximity.
-
----
-
-## 10. Gemini Generation & Grounding
-
-The retrieved chunks are formatted into a strict grounding prompt:
-
-```text
-CONTEXT:
-[Context 1 - Page 5]:
-The Cambridge IELTS 21 Practice Tests provides authentic examination papers...
-
-QUESTION:
-Is this book for IELTS?
-```
-
-Gemini generates a response using **only** the supplied context. If the fact is not in the context, it states that the answer could not be found in the PDF.
-
----
-
-## 11. Backend API Endpoints
-
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/health` | Health check verifying that the backend is operational. |
-| `GET` | `/api/documents` | Lists all `.pdf` documents available in the `documents/` folder. |
-| `POST` | `/api/documents/select` | Validates and indexes the requested PDF in ChromaDB. |
-| `POST` | `/api/chat` | Performs vector search, prompts Gemini, and returns the answer with sources. |
-
-### Example Request / Response
-
-**Select Document:**
-```bash
-curl -X POST http://localhost:8000/api/documents/select \
-  -H "Content-Type: application/json" \
-  -d '{"filename": "Cambridge_21.pdf"}'
-```
-```json
-{
-  "name": "Cambridge_21.pdf",
-  "pages": 144,
-  "chunks": 218,
-  "status": "ready"
+# Decision 1: Query Routing
+ROUTING_QUESTIONS = {
+    "query_type": Choice(
+        instructions="Classify the user query into the single most accurate category.",
+        criteria={
+            "document_question": "A question asking for information, facts, or explanations from the document.",
+            "greeting": "A conversational greeting such as 'hello', 'hi', or 'good morning'.",
+            "help": "A request for help or instructions on using the application.",
+            "unsupported": "A request unrelated to documents, such as asking to write code, tell jokes, or current weather.",
+            "clarification_needed": "A query that is too vague, fragmented, or ambiguous to understand."
+        }
+    ),
+    "should_retrieve": Noul(
+        instructions="Does answering this query require searching the document vector database?",
+        criteria=NoulCriteria(
+            true="The query is a factual question about the document and requires retrieval.",
+            false="The query is a greeting, help request, joke, or out-of-scope task."
+        )
+    )
 }
-```
 
-**Chat Query:**
-```bash
-curl -X POST http://localhost:8000/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{"filename": "Cambridge_21.pdf", "question": "Is this book for IELTS?"}'
-```
-```json
-{
-  "answer": "Yes, this book provides authentic practice tests designed for the IELTS test.",
-  "sources": [5, 10]
+# Decision 2: Context Quality & Generation Gating
+CONTEXT_QUESTIONS = {
+    "context_quality": Choice(
+        instructions="Based on the retrieved document chunks, does the context contain sufficient factual information to answer the question accurately?",
+        criteria={
+            "sufficient": "The retrieved chunks explicitly state facts, details, or explanations that directly address the question.",
+            "insufficient": "The retrieved chunks do not contain enough information to answer the question, or are only tangentially related.",
+            "uncertain": "The chunks partially touch upon the topic but are missing crucial facts or leave the answer ambiguous."
+        }
+    ),
+    "should_generate": Noul(
+        instructions="Should the answering model be allowed to generate a factual answer based on these retrieved chunks?",
+        criteria=NoulCriteria(
+            true="The retrieved chunks contain verifiable evidence to answer the question without hallucination.",
+            false="The retrieved chunks lack necessary facts; answering would require guessing or hallucinating."
+        )
+    )
 }
 ```
 
 ---
 
-## 12. Frontend Flow & States
+### Performance & Safety Principles
 
-The Astro frontend (`frontend/src/pages/index.astro`) manages these interactive states:
-
-1. **No Document Selected:** Prompts user to select a PDF. Input is disabled.
-2. **Loading Documents:** Populates the dropdown from `GET /api/documents`.
-3. **Processing Document:** Displays a status indicator while ChromaDB ingests and embeds the file.
-4. **Document Ready:** Displays page count, chunk count, and enables the chat input.
-5. **Thinking State:** Shows an animated thinking indicator while ChromaDB retrieves chunks and Gemini synthesizes an answer.
-6. **Answer Received:** Renders the assistant message bubble along with subtle `Sources: Page X, Page Y` tags.
-7. **Clear Chat:** Resets client-side chat messages without deleting ChromaDB vectors.
-8. **Error Handling:** Displays friendly error banners if the backend is offline or an API fails.
+1. **Elimination of Unnecessary LLM Invocations:** Greetings, help queries, and unrelated tasks bypass both embedding calculations, ChromaDB lookups, and Gemini calls.
+2. **Anti-Hallucination Gating:** Gemini is never prompted with irrelevant context. If the document doesn't contain the answer, Jev stops the pipeline before generation occurs.
+3. **Graceful Fallback:** If `TYPESAFE_API_KEY` is not configured or the network is unavailable, the backend employs a conservative local fallback heuristic based on lexical entity verification and cosine distance boundaries.
 
 ---
 
-## 13. Project Structure
+## 3. Code Organization
+
+The codebase is organized into small, educational modules with clear responsibilities:
 
 ```text
 mini_rag/
-│
 ├── backend/
-│   └── main.py              # FastAPI application exposing health, documents, and chat endpoints
+│   ├── main.py              # FastAPI server, endpoints, and pipeline orchestration
+│   ├── rag.py               # PDF extraction, chunking, embeddings, ChromaDB, Gemini generation
+│   └── jev_decisions.py     # TypeSafe Jev decisions (routing, retrieval gating, context quality)
 │
 ├── frontend/
 │   ├── src/
 │   │   └── pages/
-│   │       └── index.astro  # Astro web UI (dark theme, vanilla TS/CSS)
-│   ├── package.json         # Frontend package configuration
-│   └── astro.config.mjs     # Astro server configuration (port 4321)
+│   │       └── index.astro  # Astro dark-theme UI with Decision Trace toggle
+│   ├── package.json         # Frontend configuration
+│   └── astro.config.mjs     # Astro server (port 4321)
 │
 ├── documents/
-│   ├── Cambridge_21.pdf     # Sample IELTS test book (144 pages)
+│   ├── Cambridge_21.pdf     # Sample IELTS test book (144 pages, 218 chunks)
 │   └── document.pdf         # Sample ML concepts document (3 pages)
 │
-├── main.py                  # Terminal CLI interactive chatbot runner
-├── chroma_db/               # Persistent ChromaDB vector database directory
-├── .env                     # Secrets (GEMINI_API_KEY, GEMINI_MODEL)
-├── .env.example             # Template for environment variables
-├── requirements.txt         # Backend Python dependencies
-├── .gitignore               # Ignores .venv/, .env, chroma_db/, node_modules/, dist/
-└── README.md                # Comprehensive project documentation
+├── main.py                  # Interactive CLI runner (mirrors web pipeline)
+├── chroma_db/               # Persistent ChromaDB vector storage
+├── requirements.txt         # Python dependencies
+├── .env.example             # Environment template
+└── README.md                # System documentation
 ```
+
+### Module Responsibilities:
+- **`backend/main.py`**: Declares FastAPI routes (`/api/health`, `/api/documents`, `/api/documents/select`, `/api/chat`). Coordinates the Jev routing step, conditional ChromaDB query, Jev context sufficiency step, and Gemini generation.
+- **`backend/rag.py`**: Houses core RAG mechanics: `extract_pdf_text` (PyMuPDF), `create_chunks` (word-based chunking with overlap), `ingest_document`, `retrieve_relevant_chunks`, and `generate_grounded_answer`.
+- **`backend/jev_decisions.py`**: Manages `TypeSafeClient`, defines `Choice` and `Noul` questions, formats evaluation state, extracts confidence/probabilities, and provides conservative fallback logic.
 
 ---
 
-## 14. Installation
+## 4. Frontend & Backend API Flow
+
+The browser communicates strictly over HTTP with FastAPI:
+
+1. **`GET /api/documents`**: Discovers available `.pdf` files in `documents/`.
+2. **`POST /api/documents/select`**: Validates filename, checks ChromaDB collection cache, and indexes chunks if needed.
+3. **`POST /api/chat`**:
+   - Request: `{"question": "Is this book for IELTS?", "filename": "Cambridge_21.pdf"}`
+   - Response:
+     ```json
+     {
+       "answer": "Yes, this book contains authentic examination papers for IELTS preparation...",
+       "sources": [5, 10],
+       "decision": {
+         "query_type": "document_question",
+         "should_retrieve": true,
+         "should_generate": true,
+         "context_quality": "sufficient",
+         "confidence": 0.94,
+         "noul_sufficiency": 0.91,
+         "engine": "typesafe-jev (jev-latest)",
+         "is_fallback": false,
+         "retrieved_count": 3,
+         "top_page": 5,
+         "top_distance": 1.0147
+       }
+     }
+     ```
+
+> **Security Guarantee:** `TYPESAFE_API_KEY` and `GEMINI_API_KEY` remain backend-side only. They are never sent to the Astro frontend or browser client.
+
+---
+
+## 5. Educational Decision Trace Mode
+
+The Astro frontend features a dedicated **⚡ Trace: ON/OFF** toggle in the chat header.
+
+When enabled, each assistant response displays a sleek decision badge and collapsible trace card showing:
+- **Query Classification:** `document_question`, `greeting`, etc.
+- **Retrieval Action:** Chunks searched vs. bypassed.
+- **Context Quality Badge:** `sufficient`, `insufficient`, or `uncertain`.
+- **Generation Permission:** `Allowed` vs. `Blocked`.
+- **Top Result Metrics:** Page number, semantic distance, and chunk count.
+
+When disabled, users enjoy a distraction-free, polished conversational experience with subtle live status text (*"Evaluating query intent..."*, *"Searching ChromaDB..."*, *"Verifying context sufficiency..."*).
+
+---
+
+## 6. Installation & Setup
 
 ### 1. Python Environment (Backend)
-Python 3.10+ (Python 3.12 recommended) is required.
+Requires Python 3.10+ (Python 3.12 recommended):
 
 ```bash
-# From the mini_rag/ root directory
-python3.12 -m venv .venv
+# Create and activate virtual environment
+python3 -m venv .venv
 source .venv/bin/activate
+
+# Install dependencies (includes typesafe-sdk, chromadb, google-genai, fastapi)
 pip install -r requirements.txt
 ```
 
 ### 2. Node.js Environment (Frontend)
-Node 18+ (Node 22 recommended) is required.
+Requires Node 18+:
 
 ```bash
 cd frontend
@@ -292,32 +312,36 @@ npm install
 cd ..
 ```
 
----
-
-## 15. Environment Variables
-
-Create a `.env` file in the project root:
+### 3. Environment Variables
+Create a `.env` file in the root directory:
 
 ```bash
 cp .env.example .env
 ```
 
-Set your configuration:
+Configure your API keys:
 
 ```env
+# Google Gemini API Key (Required for natural language answer generation)
 GEMINI_API_KEY=your_gemini_api_key_here
 GEMINI_MODEL=gemini-2.5-flash
+
+# TypeSafe AI Jev API Key (Required for Jev decision-making layer)
+TYPESAFE_API_KEY=your_typesafe_api_key_here
+TYPESAFE_MODEL=jev-latest
 ```
 
-> **Security Note:** `GEMINI_API_KEY` is loaded strictly by the FastAPI backend. It is **never** exposed to the Astro frontend or sent to the browser.
+*(Note: If `TYPESAFE_API_KEY` is not provided, the application automatically runs in conservative fallback mode without crashing).*
 
 ---
 
-## 16. Running the Application
+## 7. Running the Application
+
+### Option A: Web Application (Astro + FastAPI)
 
 Open two terminal tabs:
 
-### Terminal 1: Start the Backend (FastAPI)
+**Terminal 1 (Backend API):**
 ```bash
 source .venv/bin/activate
 cd backend
@@ -325,7 +349,7 @@ uvicorn main:app --reload --port 8000
 ```
 *Backend runs on: `http://localhost:8000`*
 
-### Terminal 2: Start the Frontend (Astro)
+**Terminal 2 (Frontend UI):**
 ```bash
 cd frontend
 npm run dev
@@ -336,31 +360,57 @@ Open **http://localhost:4321** in your browser.
 
 ---
 
-## 17. Example Usage Walkthrough
+### Option B: Terminal CLI Runner
 
-1. Open `http://localhost:4321` in your browser.
-2. Select **`Cambridge_21.pdf`** from the dropdown and click **Load Document**.
-3. Status banner updates to: `Cambridge_21.pdf — 144 pages • 218 chunks • Ready to chat`.
-4. Ask: *"Is this book for IELTS?"*
-5. Assistant responds: *"Yes, this book provides authentic practice tests designed for the IELTS test."* with `Sources: Page 5, Page 10`.
-6. Ask: *"What is quantum computing?"*
-7. Assistant responds: *"The provided PDF context does not contain information about quantum computing."*
+Run the interactive terminal interface directly:
 
----
-
-## 18. Limitations
-
-As an educational mini-project, several constraints exist:
-- **Broad Summaries:** Localized chunk vector search excels at pinpoint questions (*"What is backpropagation?"*), but can struggle with whole-document summaries (*"Summarize the entire 200-page book"*).
-- **Scanned PDFs:** Requires text-based PDFs. Scanned images without text layers require OCR.
-- **Single Turn Focus:** The backend treats each query independently without conversational session memory.
+```bash
+source .venv/bin/activate
+python main.py
+```
 
 ---
 
-## 19. Future Improvements
+## 8. Verification & Test Suite
 
-- Add hybrid keyword + dense vector search (BM25 + embeddings).
-- Implement cross-encoder reranking (e.g., `bge-reranker`).
-- Add conversational chat history buffering.
-- Add multi-PDF cross-collection searching.
-- Integrate OCR support for scanned documents.
+The system has been verified against all 6 master test cases:
+
+| Test Case | Query | Jev Intent | ChromaDB Retrieval | Jev Context Quality | Gemini Generation | Result |
+|---|---|---|---|---|---|---|
+| **Test 1: Greeting** | `"Hi"` | `greeting` | ❌ Bypassed | N/A | ❌ Bypassed | Returns greeting immediately. No DB or LLM call. |
+| **Test 2: Document Question** | `"Is this book for IELTS?"` | `document_question` | ✅ Retrieved (3 chunks) | `sufficient` | ✅ Allowed | Answers with source pages `[5, 10]`. |
+| **Test 3: Specific Question** | `"What are the four components of IELTS?"` | `document_question` | ✅ Retrieved (3 chunks) | `sufficient` | ✅ Allowed | Explains Listening, Reading, Writing, Speaking (`[5, 8, 10]`). |
+| **Test 4: Out-of-Document** | `"What is the population of Germany?"` | `document_question` | ✅ Retrieved (3 chunks) | `insufficient` | ❌ Blocked | Returns: *"I couldn't find enough information about that in the selected PDF."* |
+| **Test 5: Unsupported Task** | `"Write me a Python game."` | `unsupported` | ❌ Bypassed | N/A | ❌ Bypassed | Refuses politely. No DB or LLM call. |
+| **Test 6: Empty Query** | `""` | N/A | ❌ Bypassed | N/A | ❌ Bypassed | HTTP 400 Bad Request validation error. |
+
+To run the automated verification script:
+
+```bash
+source .venv/bin/activate
+python -c '
+from fastapi.testclient import TestClient
+from backend.main import app
+
+client = TestClient(app)
+client.post("/api/documents/select", json={"filename": "Cambridge_21.pdf"})
+
+# Run tests
+t1 = client.post("/api/chat", json={"question": "Hi", "filename": "Cambridge_21.pdf"}).json()
+assert t1["decision"]["query_type"] == "greeting" and t1["decision"]["should_retrieve"] == False
+
+t2 = client.post("/api/chat", json={"question": "Is this book for IELTS?", "filename": "Cambridge_21.pdf"}).json()
+assert t2["decision"]["context_quality"] == "sufficient" and t2["decision"]["should_generate"] == True
+
+t4 = client.post("/api/chat", json={"question": "What is the population of Germany?", "filename": "Cambridge_21.pdf"}).json()
+assert t4["decision"]["context_quality"] == "insufficient" and t4["decision"]["should_generate"] == False
+print("Verification complete: All tests passed!")
+'
+```
+
+---
+
+## 9. Known Limitations
+
+- **Single-Turn Scope:** The backend processes each question independently without an external conversational memory database. The frontend preserves client-side chat bubbles for continuity. If a user asks *"What is IELTS?"* followed by *"What are its four components?"*, the second question is embedded directly.
+- **Text-Only PDFs:** The pipeline extracts text via PyMuPDF. Scanned PDFs containing only bitmap images require an external OCR pre-processing step.

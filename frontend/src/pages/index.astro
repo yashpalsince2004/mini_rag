@@ -22,7 +22,9 @@
         <span class="badge-pill">EDUCATIONAL</span>
       </div>
       <div class="nav-right">
+        <span class="pill-tag featured">TypeSafe Jev</span>
         <span class="pill-tag">all-MiniLM-L6-v2</span>
+        <span class="pill-tag">ChromaDB</span>
         <span class="pill-tag featured">Gemini 2.5 Flash</span>
       </div>
     </div>
@@ -31,10 +33,10 @@
   <div class="app-layout">
     <!-- Hero / Headline Band -->
     <section class="hero-band">
-      <div class="badge-pill cta-badge">RETRIEVAL-AUGMENTED GENERATION</div>
+      <div class="badge-pill cta-badge">TYPESAFE JEV DECISION LAYER • GROUNDED RAG</div>
       <h1 class="hero-headline">Ask questions about your documents.</h1>
       <p class="hero-subline">
-        Semantic vector search powered by local ChromaDB embeddings and grounded generation with Google Gemini.
+        Semantic vector search powered by ChromaDB, gated and verified by TypeSafe Jev System One decisions, with grounded synthesis by Google Gemini.
       </p>
     </section>
 
@@ -79,7 +81,10 @@
           <span class="caption-uppercase">CONVERSATION</span>
           <span id="active-doc-tag" class="doc-badge hidden">None</span>
         </div>
-        <button id="clear-btn" class="button-secondary btn-sm" disabled>Clear Chat</button>
+        <div class="chat-header-actions">
+          <button id="inspector-toggle-btn" class="button-secondary btn-sm" title="Toggle Educational Decision Inspector">⚡ Trace: OFF</button>
+          <button id="clear-btn" class="button-secondary btn-sm" disabled>Clear Chat</button>
+        </div>
       </div>
 
       <!-- Messages Flow Area -->
@@ -113,10 +118,10 @@
   <footer class="app-footer">
     <div class="footer-container">
       <p class="footer-pipeline">
-        Pipeline: <strong>PyMuPDF</strong> (Extraction) → <strong>Word Sliding Window</strong> (Chunking) → <strong>Sentence Transformers</strong> (384-D Embeddings) → <strong>ChromaDB</strong> (Vector Index) → <strong>Gemini 2.5 Flash</strong> (Generation)
+        Pipeline: <strong>PyMuPDF</strong> (Extraction) → <strong>Chunking</strong> (300w) → <strong>Sentence Transformers</strong> (384-D) → <strong>TypeSafe Jev</strong> (Router) → <strong>ChromaDB</strong> (Retrieval) → <strong>TypeSafe Jev</strong> (Context QA) → <strong>Gemini 2.5 Flash</strong> (Generation)
       </p>
       <p class="footer-copyright">
-        Local RAG Educational Architecture • Grounded & Verified
+        System One Decision-Gated Educational RAG • Grounded & Verified
       </p>
     </div>
   </footer>
@@ -136,7 +141,9 @@
     let currentDocument = null;
     let isProcessing = false;
     let isGenerating = false;
+    let inspectorEnabled = false;
     let messages = [];
+    let thinkingTimer: any = null;
 
     // DOM References
     const docSelect = document.getElementById("doc-select") as HTMLSelectElement;
@@ -151,6 +158,7 @@
     const queryInput = document.getElementById("query-input") as HTMLInputElement;
     const sendBtn = document.getElementById("send-btn") as HTMLButtonElement;
     const clearBtn = document.getElementById("clear-btn") as HTMLButtonElement;
+    const inspectorToggleBtn = document.getElementById("inspector-toggle-btn") as HTMLButtonElement;
     const activeDocTag = document.getElementById("active-doc-tag") as HTMLElement;
 
     function showError(msg: string) {
@@ -165,6 +173,14 @@
     function clearError() {
       errorBanner.classList.add("hidden");
     }
+
+    // Toggle Decision Inspector
+    inspectorToggleBtn?.addEventListener("click", () => {
+      inspectorEnabled = !inspectorEnabled;
+      inspectorToggleBtn.textContent = inspectorEnabled ? "⚡ Trace: ON" : "⚡ Trace: OFF";
+      inspectorToggleBtn.classList.toggle("active", inspectorEnabled);
+      renderMessages();
+    });
 
     // 1. Fetch available documents from FastAPI
     async function fetchDocuments() {
@@ -267,7 +283,7 @@
       }
     });
 
-    // 3. Render Messages with Markdown & Dark Badges
+    // 3. Render Messages with Markdown, Sources, and Jev Decision Trace
     function renderMessages() {
       if (messages.length === 0) {
         chatMessages.innerHTML = "";
@@ -286,7 +302,7 @@
       clearBtn.disabled = false;
       chatMessages.innerHTML = "";
 
-      messages.forEach((msg: { role: string; content: string; sources?: number[] }) => {
+      messages.forEach((msg: { role: string; content: string; sources?: number[]; decision?: any }) => {
         const row = document.createElement("div");
         row.className = `message-row ${msg.role}`;
 
@@ -332,6 +348,47 @@
           bubble.appendChild(sourcesContainer);
         }
 
+        // Decision Trace Card (Educational Mode)
+        if (msg.role === "assistant" && msg.decision && inspectorEnabled) {
+          const d = msg.decision;
+          const confPercent = Math.round((d.confidence || 0) * 100);
+          const retrieveText = d.should_retrieve
+            ? `Executed (${d.retrieved_count || 0} chunks retrieved)`
+            : "Bypassed (Non-document query)";
+          const generateText = d.should_generate
+            ? "Allowed (Grounded in context)"
+            : "Blocked (Context insufficient/gated)";
+          const qualityText = d.context_quality || "n/a";
+
+          const traceCard = document.createElement("div");
+          traceCard.className = "decision-trace-card";
+          traceCard.innerHTML = `
+            <div class="trace-header">
+              <span class="trace-title">⚡ JEV DECISION TRACE</span>
+              <span class="trace-engine">${d.engine || "TypeSafe Jev"}</span>
+            </div>
+            <div class="trace-grid">
+              <div class="trace-item">
+                <span class="trace-label">Query Intent:</span>
+                <span class="trace-val intent">${d.query_type} (${confPercent}%)</span>
+              </div>
+              <div class="trace-item">
+                <span class="trace-label">ChromaDB Retrieval:</span>
+                <span class="trace-val">${retrieveText}</span>
+              </div>
+              <div class="trace-item">
+                <span class="trace-label">Context Quality:</span>
+                <span class="trace-val quality-${qualityText}">${qualityText}</span>
+              </div>
+              <div class="trace-item">
+                <span class="trace-label">LLM Generation:</span>
+                <span class="trace-val">${generateText}</span>
+              </div>
+            </div>
+          `;
+          bubble.appendChild(traceCard);
+        }
+
         row.appendChild(bubble);
         chatMessages.appendChild(row);
       });
@@ -339,7 +396,7 @@
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
-    // Thinking indicator
+    // Thinking indicator with progressive stages
     function showThinkingIndicator() {
       const row = document.createElement("div");
       row.className = "message-row assistant thinking-row";
@@ -355,15 +412,32 @@
 
       const content = document.createElement("div");
       content.className = "message-content thinking-text";
-      content.innerHTML = '<span class="pulse-indicator"></span> Searching ChromaDB & synthesizing answer...';
+      content.innerHTML = '<span class="pulse-indicator"></span> <span id="thinking-stage-text">Evaluating query intent with TypeSafe Jev...</span>';
       bubble.appendChild(content);
 
       row.appendChild(bubble);
       chatMessages.appendChild(row);
       chatMessages.scrollTop = chatMessages.scrollHeight;
+
+      const stages = [
+        "Evaluating query intent with TypeSafe Jev...",
+        "Searching ChromaDB & ranking chunks...",
+        "Verifying context sufficiency with Jev...",
+        "Synthesizing answer with Gemini..."
+      ];
+      let step = 0;
+      thinkingTimer = setInterval(() => {
+        step = (step + 1) % stages.length;
+        const textEl = document.getElementById("thinking-stage-text");
+        if (textEl) textEl.textContent = stages[step];
+      }, 700);
     }
 
     function removeThinkingIndicator() {
+      if (thinkingTimer) {
+        clearInterval(thinkingTimer);
+        thinkingTimer = null;
+      }
       const indicator = document.getElementById("thinking-indicator");
       if (indicator) indicator.remove();
     }
@@ -406,7 +480,8 @@
         messages.push({
           role: "assistant",
           content: data.answer,
-          sources: data.sources || []
+          sources: data.sources || [],
+          decision: data.decision || null
         });
       } catch (err: any) {
         removeThinkingIndicator();
@@ -1023,6 +1098,96 @@
       font-weight: 600;
       display: inline-flex;
       align-items: center;
+    }
+
+    /* Decision Trace Card (Educational Jev Inspector) */
+    .decision-trace-card {
+      margin-top: 0.9rem;
+      background: #091515;
+      border: 1px solid #1c3333;
+      border-radius: var(--rounded-md);
+      padding: 0.75rem 0.95rem;
+      font-size: 0.82rem;
+    }
+
+    .trace-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.65rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid #152929;
+    }
+
+    .trace-title {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.75px;
+      color: var(--colors-brand-mint);
+    }
+
+    .trace-engine {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--colors-on-dark-muted);
+      background: #112424;
+      padding: 0.15rem 0.45rem;
+      border-radius: var(--rounded-xs);
+    }
+
+    .trace-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.5rem 0.85rem;
+    }
+
+    .trace-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+
+    .trace-label {
+      font-size: 0.68rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--colors-on-dark-muted);
+    }
+
+    .trace-val {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--colors-on-dark-body);
+    }
+
+    .trace-val.intent {
+      color: #9fe2d4;
+    }
+
+    .trace-val.quality-sufficient {
+      color: #4ade80;
+    }
+
+    .trace-val.quality-insufficient {
+      color: #f87171;
+    }
+
+    .trace-val.quality-uncertain {
+      color: #fbbf24;
+    }
+
+    .chat-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    #inspector-toggle-btn.active {
+      border-color: var(--colors-brand-mint);
+      color: var(--colors-brand-mint);
+      background: #112828;
     }
 
     /* Thinking State */

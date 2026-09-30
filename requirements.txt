@@ -5,3 +5,4 @@ pymupdf
 sentence-transformers
 google-genai
 python-dotenv
+typesafe-sdk>=0.7.0
