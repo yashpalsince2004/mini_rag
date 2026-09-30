@@ -1,26 +1,50 @@
-# Mini PDF RAG Chatbot (with TypeSafe Jev, Astro & FastAPI)
+# Mini PDF RAG Chatbot (with TypeSafe Jev via OpenRouter, Astro & FastAPI)
 
-A minimal, educational **Retrieval-Augmented Generation (RAG)** system featuring **TypeSafe AI's Jev** as an intelligent decision-making layer, a **FastAPI backend**, and a modern dark **Astro JS web UI**. Built from scratch using Python, PyMuPDF, Sentence Transformers, ChromaDB, TypeSafe Jev, and Google Gemini.
+A minimal, educational **Retrieval-Augmented Generation (RAG)** system featuring **TypeSafe AI's Jev** accessed via **OpenRouter's Decisions API** as an intelligent decision-making layer, a **FastAPI backend**, and a modern dark **Astro JS web UI**. Built from first principles using Python, PyMuPDF, Sentence Transformers, ChromaDB, TypeSafe Jev (OpenRouter), and Google Gemini.
 
 The primary goal of this project is understanding how a production-grade RAG pipeline makes **principled decisions** from first principles—without heavy abstractions or high-level frameworks like LangChain or LlamaIndex.
 
 ---
 
-## 1. Project Overview & Responsibility Matrix
+## 1. What is RAG?
 
-Every component in this architecture has a single, strictly separated responsibility:
+**Retrieval-Augmented Generation (RAG)** is an AI architecture that enhances Large Language Models (LLMs) by grounding them in external factual knowledge. Instead of relying solely on the training weights of a generative model (which can hallucinate or become outdated), RAG:
+1. Extracts text from proprietary documents (e.g. PDFs).
+2. Partitions the text into semantic chunks with overlapping boundaries.
+3. Generates dense vector embeddings using an embedding model.
+4. Stores and indexes the vectors in a vector database (e.g. ChromaDB).
+5. Retrieves the top-$K$ most relevant chunks when a user asks a question.
+6. Augments the LLM prompt with the retrieved evidence to formulate a grounded answer.
 
-| Component | Responsibility | Why this separation is intentional |
-|---|---|---|
-| **Astro** | User interface & Presentation | Modern, responsive dark UI with live thinking indicators and an educational Jev Decision Trace panel. |
-| **FastAPI** | Pipeline Orchestration | Handles API endpoints, input validation, and coordinates the flow between Jev, ChromaDB, and Gemini. |
-| **TypeSafe Jev** | Decision Layer | Intelligently evaluates user intent, controls when retrieval occurs, validates context sufficiency, and gates LLM generation. |
-| **PyMuPDF (`fitz`)** | PDF Text Extraction | Extracts raw text page-by-page while preserving accurate page metadata. |
-| **Sentence Transformers** | Dense Vector Embeddings | Converts text passages into 384-dimensional dense semantic vectors using `all-MiniLM-L6-v2`. |
-| **ChromaDB** | Vector Similarity Retrieval | Indexes and queries top-$K$ nearest semantic chunks using persistent local storage (`./chroma_db/`). |
-| **Google Gemini (`gemini-2.5-flash`)** | Grounded Answer Generation | Synthesizes natural-language answers strictly grounded in retrieved evidence—invoked **only** when Jev verifies context sufficiency. |
+---
 
-> **Key Architectural Principle:**  
+## 2. What is Jev?
+
+**Jev** is a specialized "System One" AI model created by **TypeSafe AI**. Unlike generative LLMs (like GPT-4 or Gemini) that generate free-form text and explanations, Jev is built specifically for **fast, typed, deterministic decisions**:
+- **No free-form prose:** It does not produce conversational filler, apologies, or markdown text.
+- **Typed Primitives:** It outputs calibrated probabilities and discrete categorical selections across three primitives:
+  - **Choice:** Selects exactly one option from a defined set of criteria with confidence and probability distributions.
+  - **Noul:** Evaluates whether a condition holds true, returning a probability between `0.0` and `1.0`.
+  - **Score:** Positions an item on an ordered multi-tier scale.
+- **Role in Software:** Jev acts as "programmable common sense", enabling traditional code to branch intelligently based on semantic meaning.
+
+---
+
+## 3. Why Use Jev? (Separation of Responsibilities)
+
+In naive RAG architectures, every query traverses the entire pipeline—wasting tokens and hallucinating when answers are absent. By introducing Jev as the decision layer, we establish strict separation of responsibilities:
+
+| Layer | Component | Responsibility | Why this separation matters |
+|---|---|---|---|
+| **Presentation** | Astro JS | User Interface & Trace | Renders dark UI, status indicators, and educational Decision Trace card. |
+| **Orchestration** | FastAPI | Workflow Coordination | Exposes API routes, validates inputs, and sequences pipeline execution. |
+| **Decision** | TypeSafe Jev (via OpenRouter) | Intelligent Control Gating | Evaluates intent, decides if retrieval is needed, checks context quality, and gates LLM generation. |
+| **Extraction** | PyMuPDF (`fitz`) | Text Extraction | Parses PDF text page-by-page preserving page numbers. |
+| **Embeddings** | Sentence Transformers | Vector Encoding | Generates 384-dimensional dense vectors (`all-MiniLM-L6-v2`). |
+| **Retrieval** | ChromaDB | Vector Search | Indexes and queries top-$K$ nearest semantic chunks from `./chroma_db/`. |
+| **Generation** | Google Gemini (`gemini-2.5-flash`) | Answer Synthesis | Writes natural-language answers **only** when Jev verifies context sufficiency. |
+
+> **Key Rule:**  
 > - **Jev decides what the system should do.**  
 > - **ChromaDB finds relevant information.**  
 > - **Gemini explains the retrieved information.**  
@@ -29,42 +53,19 @@ Every component in this architecture has a single, strictly separated responsibi
 
 ---
 
-## 2. The Jev Decision Layer
+## 4. Why OpenRouter?
 
-### Why Jev was Introduced
-
-In traditional naive RAG architectures, every user input blindly traverses the entire pipeline:
-
-```text
-Naive RAG (Before):
-
-User Query
-    │
-    ▼
-Embed Query (Sentence Transformers)
-    │
-    ▼
-ChromaDB Vector Search (Top-K Chunks)
-    │
-    ▼
-Gemini LLM Generation
-    │
-    ▼
-Final Answer (often hallucinated or apologizing)
-```
-
-#### Flaws in Naive RAG:
-1. **Unnecessary Retrieval & LLM Calls:** If a user says `"Hi"`, naive RAG embeds the greeting, searches ChromaDB for random nearest chunks, and asks Gemini to formulate a response.
-2. **Hallucination on Missing Context:** If a user asks an out-of-document question (e.g., *"What is the population of Germany?"* when reading an IELTS test preparation book), ChromaDB will still return its top 3 closest chunks. Because distances are relative, Gemini is prompted with irrelevant snippets and may hallucinate or formulate an unverified response.
-3. **Arbitrary Distance Thresholds:** Hard-coding rules like `if distance < 1.0` is fragile across different embedding models and document domains.
+Accessing Jev through **OpenRouter** provides key benefits:
+1. **Single API Key:** Uses your existing `OPENROUTER_API_KEY` without requiring a separate direct TypeSafe paid account or custom SDK.
+2. **Dedicated Decisions Endpoint:** OpenRouter hosts Jev on a specialized endpoint (`POST https://openrouter.ai/api/alpha/decisions`) specifically designed for System One typed outputs.
+3. **Model Flexibility:** Easily switch models or aliases via `.env` (e.g. `JEV_MODEL=~typesafe/jev-latest` or `typesafe/jev-1.13`) without changing code.
+4. **Cost Efficiency:** Jev input tokens are low-cost, and output tokens are unmetered ($0), making decision gating economical.
 
 ---
 
-### The New Architecture (After Jev Integration)
+## 5. Full Architecture Diagram
 
 ```text
-Decision-Gated RAG (After):
-
                          USER
                           │
                           ▼
@@ -74,152 +75,156 @@ Decision-Gated RAG (After):
                     FASTAPI API
                           │
                           ▼
-                   ┌─────────────┐
-                   │  JEV ROUTER │
-                   └──────┬──────┘
+              ┌───────────────────────┐
+              │  JEV VIA OPENROUTER   │
+              │  Query Classification │
+              └───────────┬───────────┘
                           │
-             ┌────────────┼─────────────┐
-             │            │             │
-             ▼            ▼             ▼
-         GREETING    DOC QUESTION   UNSUPPORTED
-      ("Hello!...")       │         ("I only answer
-                          ▼          doc questions")
-                      CHROMADB
-                      RETRIEVER
-                          │
-                          ▼
-                     TOP-K CHUNKS
-                          │
-                          ▼
-                   ┌─────────────┐
-                   │ JEV CONTEXT │
-                   │  EVALUATION │
-                   └──────┬──────┘
-                          │
-                ┌─────────┴─────────┐
-                │                   │
-           SUFFICIENT          INSUFFICIENT
-                │                   │
-                ▼                   ▼
-             GEMINI            NO GENERATION
-            GENERATOR      ("I couldn't find enough
-                │          information in the PDF.")
-                ▼                   │
-          ANSWER + SOURCES          │
-                └─────────┬─────────┘
-                          │
-                          ▼
-                   FINAL RESPONSE
+             ┌────────────┴─────────────┐
+             │                          │
+        GREETING / OTHER            DOCUMENT
+         ("Hello!...")              QUESTION
+         (No DB, no LLM)                │
+                                        ▼
+                               ┌────────────────┐
+                               │    CHROMADB    │
+                               │ Vector Search  │
+                               └────────┬───────┘
+                                        │
+                                   TOP-K CHUNKS
+                                        │
+                                        ▼
+                              ┌───────────────────┐
+                              │     JEV AGAIN     │
+                              │ Context Quality & │
+                              │ Generation Gating │
+                              └─────────┬─────────┘
+                                        │
+                             ┌──────────┴──────────┐
+                             │                     │
+                        SUFFICIENT            INSUFFICIENT
+                             │                     │
+                             ▼                     ▼
+                     ┌───────────────┐     NO GENERATION
+                     │    GEMINI     │    ("I couldn't find
+                     │ 2.5 FLASH LLM │    enough info in PDF")
+                     └───────┬───────┘             │
+                             │                     │
+                       ANSWER + SOURCES            │
+                             └──────────┬──────────┘
+                                        │
+                                        ▼
+                                  FINAL RESPONSE
 ```
 
 ---
 
-### The Four Jev Decision Stages
+## 6. Detailed Pipeline & Worked Examples
 
-Rather than creating a single monolithic decision, the decision layer is split into focused, typed stages:
+### Example A: The Success Path (Document Question)
+```text
+1. User asks: "What are the four sections of IELTS?"
+2. FastAPI calls Jev via OpenRouter (/api/alpha/decisions).
+3. Jev Decision 1 (Query Routing):
+   - query_type = "document_question" (confidence: 0.82)
+4. Jev Decision 2 (Retrieval Gating):
+   - should_retrieve = True (noul: 0.80)
+5. FastAPI executes ChromaDB vector search for top 3 chunks.
+   - Page 5 (distance: 0.9129)
+   - Page 8 (distance: 0.9458)
+   - Page 10 (distance: 0.9599)
+6. FastAPI sends question + retrieved chunks to Jev Decision 3 & 4.
+7. Jev Decision 3 (Context Quality):
+   - context_quality = "sufficient" (confidence: 1.0)
+8. Jev Decision 4 (Generation Gating):
+   - should_generate = True (noul: 0.97)
+9. FastAPI calls Gemini 2.5 Flash with retrieved context.
+10. Gemini returns: "IELTS consists of four components: Listening, Reading, Writing, and Speaking..." (Sources: [5, 8, 10]).
+```
 
-#### Stage 1: Query Intent Routing (`classify_query_intent`)
-Classifies user intent into discrete, typed choices:
-- `document_question`: Specific inquiry regarding content in the document.
-- `greeting`: Social greeting or conversational opener (`"Hi"`, `"Hello"`).
-- `help`: Request for instructions or capabilities (`"How do I use this?"`).
-- `unsupported`: Out-of-scope requests (`"Write me a Python game"`, `"Tell me a joke"`).
-- `clarification_needed`: Vague, incomplete, or ambiguous inputs.
+### Example B: The Failure Path (Irrelevant Context / Zero Hallucination)
+```text
+1. User asks: "What is the population of Germany?"
+2. Jev classifies as document_question (should_retrieve = True).
+3. ChromaDB retrieves top 3 chunks (distances 1.35 to 1.57, weak semantic match).
+4. FastAPI sends question + chunks to Jev.
+5. Jev evaluates context quality:
+   - context_quality = "insufficient" (confidence: 1.0)
+   - should_generate = False (noul: 0.02)
+6. Gemini is NEVER called.
+7. Backend immediately returns:
+   "I couldn't find enough information about that in the selected PDF."
+```
 
-#### Stage 2: Retrieval Gating (`should_retrieve`)
-A typed boolean decision determining whether ChromaDB retrieval should execute:
-- `"Is this book for IELTS?"` → `should_retrieve = True`
-- `"Hi"` → `should_retrieve = False` (Direct greeting response returned immediately)
-- `"Write a snake game"` → `should_retrieve = False` (Direct refusal returned immediately)
-
-#### Stage 3: Context Quality Assessment (`evaluate_context_sufficiency`)
-After ChromaDB returns the top-$K$ chunks with their semantic distances and page metadata, Jev evaluates whether the retrieved text actually contains the necessary factual evidence:
-- `sufficient`: The retrieved chunks explicitly state facts that answer the question.
-- `insufficient`: The retrieved chunks do not contain enough information or are only tangentially related.
-- `uncertain`: The chunks partially touch upon the topic but miss crucial facts.
-
-#### Stage 4: Generation Control (`should_generate`)
-A Noul probability decision controlling whether Gemini is permitted to run:
-- If `context_quality == "sufficient"` → `should_generate = True` → Gemini is invoked.
-- If `context_quality == "insufficient"` → `should_generate = False` → Gemini is blocked. The backend returns:
-  > *"I couldn't find enough information about that in the selected PDF."*
-- If `context_quality == "uncertain"` → conservative fallback: Gemini is blocked to prevent hallucinations.
-
----
-
-### Official TypeSafe SDK Implementation
-
-The project uses the official `typesafe-sdk` (`v0.7.2`). Decisions are declared with `Choice` and `Noul`:
-
-```python
-from typesafe import TypeSafeClient, Choice, Noul, NoulCriteria
-
-# Decision 1: Query Routing
-ROUTING_QUESTIONS = {
-    "query_type": Choice(
-        instructions="Classify the user query into the single most accurate category.",
-        criteria={
-            "document_question": "A question asking for information, facts, or explanations from the document.",
-            "greeting": "A conversational greeting such as 'hello', 'hi', or 'good morning'.",
-            "help": "A request for help or instructions on using the application.",
-            "unsupported": "A request unrelated to documents, such as asking to write code, tell jokes, or current weather.",
-            "clarification_needed": "A query that is too vague, fragmented, or ambiguous to understand."
-        }
-    ),
-    "should_retrieve": Noul(
-        instructions="Does answering this query require searching the document vector database?",
-        criteria=NoulCriteria(
-            true="The query is a factual question about the document and requires retrieval.",
-            false="The query is a greeting, help request, joke, or out-of-scope task."
-        )
-    )
-}
-
-# Decision 2: Context Quality & Generation Gating
-CONTEXT_QUESTIONS = {
-    "context_quality": Choice(
-        instructions="Based on the retrieved document chunks, does the context contain sufficient factual information to answer the question accurately?",
-        criteria={
-            "sufficient": "The retrieved chunks explicitly state facts, details, or explanations that directly address the question.",
-            "insufficient": "The retrieved chunks do not contain enough information to answer the question, or are only tangentially related.",
-            "uncertain": "The chunks partially touch upon the topic but are missing crucial facts or leave the answer ambiguous."
-        }
-    ),
-    "should_generate": Noul(
-        instructions="Should the answering model be allowed to generate a factual answer based on these retrieved chunks?",
-        criteria=NoulCriteria(
-            true="The retrieved chunks contain verifiable evidence to answer the question without hallucination.",
-            false="The retrieved chunks lack necessary facts; answering would require guessing or hallucinating."
-        )
-    )
-}
+### Example C: Social Greeting
+```text
+1. User says: "Hi"
+2. Jev classifies as greeting (confidence: 1.0, should_retrieve: False).
+3. ChromaDB is NEVER called.
+4. Gemini is NEVER called.
+5. Backend immediately returns: "Hello! Ask me anything about the selected PDF."
 ```
 
 ---
 
-### Performance & Safety Principles
+## 7. OpenRouter Decisions API Specification
 
-1. **Elimination of Unnecessary LLM Invocations:** Greetings, help queries, and unrelated tasks bypass both embedding calculations, ChromaDB lookups, and Gemini calls.
-2. **Anti-Hallucination Gating:** Gemini is never prompted with irrelevant context. If the document doesn't contain the answer, Jev stops the pipeline before generation occurs.
-3. **Graceful Fallback:** If `TYPESAFE_API_KEY` is not configured or the network is unavailable, the backend employs a conservative local fallback heuristic based on lexical entity verification and cosine distance boundaries.
+The implementation sends structured payloads to OpenRouter's specialized endpoint:
+
+- **Endpoint:** `POST https://openrouter.ai/api/alpha/decisions`
+- **Headers:**
+  ```json
+  {
+    "Authorization": "Bearer <OPENROUTER_API_KEY>",
+    "Content-Type": "application/json",
+    "HTTP-Referer": "http://localhost:8000",
+    "X-Title": "Mini PDF RAG Chatbot"
+  }
+  ```
+- **Payload Schema:**
+  ```json
+  {
+    "model": "~typesafe/jev-latest",
+    "state": { "user_query": "Is this book for IELTS?", "active_document": "Cambridge_21.pdf" },
+    "questions": {
+      "query_type": {
+        "type": "choice",
+        "instructions": "Classify the user query intent for a document question-answering assistant.",
+        "criteria": {
+          "document_question": "Questions asking about information, facts, or details from the document.",
+          "greeting": "Casual greetings or hello.",
+          "help": "Asking how to use the assistant.",
+          "unsupported": "Out-of-scope requests such as writing code or checking weather.",
+          "clarification_needed": "Vague or ambiguous input."
+        }
+      },
+      "should_retrieve": {
+        "type": "noul",
+        "instructions": "Should the assistant perform semantic retrieval from the selected document?",
+        "criteria": {
+          "true": "The user is asking a factual question about the document content.",
+          "false": "The query is a greeting, help request, joke, or out-of-scope question."
+        }
+      }
+    }
+  }
+  ```
 
 ---
 
-## 3. Code Organization
-
-The codebase is organized into small, educational modules with clear responsibilities:
+## 8. Code Organization
 
 ```text
 mini_rag/
 ├── backend/
 │   ├── main.py              # FastAPI server, endpoints, and pipeline orchestration
 │   ├── rag.py               # PDF extraction, chunking, embeddings, ChromaDB, Gemini generation
-│   └── jev_decisions.py     # TypeSafe Jev decisions (routing, retrieval gating, context quality)
+│   └── jev_decisions.py     # Reusable JevClient (OpenRouter Decisions API) & fallback logic
 │
 ├── frontend/
 │   ├── src/
 │   │   └── pages/
-│   │       └── index.astro  # Astro dark-theme UI with Decision Trace toggle
+│   │       └── index.astro  # Astro dark UI with live thinking states & '⚡ Trace: ON/OFF' inspector
 │   ├── package.json         # Frontend configuration
 │   └── astro.config.mjs     # Astro server (port 4321)
 │
@@ -227,143 +232,90 @@ mini_rag/
 │   ├── Cambridge_21.pdf     # Sample IELTS test book (144 pages, 218 chunks)
 │   └── document.pdf         # Sample ML concepts document (3 pages)
 │
+├── test_jev.py              # Isolated verification test for OpenRouter Decisions API
 ├── main.py                  # Interactive CLI runner (mirrors web pipeline)
 ├── chroma_db/               # Persistent ChromaDB vector storage
-├── requirements.txt         # Python dependencies
-├── .env.example             # Environment template
+├── requirements.txt         # Backend Python dependencies (includes httpx)
+├── .env.example             # Template for environment variables
 └── README.md                # System documentation
 ```
 
-### Module Responsibilities:
-- **`backend/main.py`**: Declares FastAPI routes (`/api/health`, `/api/documents`, `/api/documents/select`, `/api/chat`). Coordinates the Jev routing step, conditional ChromaDB query, Jev context sufficiency step, and Gemini generation.
-- **`backend/rag.py`**: Houses core RAG mechanics: `extract_pdf_text` (PyMuPDF), `create_chunks` (word-based chunking with overlap), `ingest_document`, `retrieve_relevant_chunks`, and `generate_grounded_answer`.
-- **`backend/jev_decisions.py`**: Manages `TypeSafeClient`, defines `Choice` and `Noul` questions, formats evaluation state, extracts confidence/probabilities, and provides conservative fallback logic.
-
 ---
 
-## 4. Frontend & Backend API Flow
+## 9. Environment Variables
 
-The browser communicates strictly over HTTP with FastAPI:
-
-1. **`GET /api/documents`**: Discovers available `.pdf` files in `documents/`.
-2. **`POST /api/documents/select`**: Validates filename, checks ChromaDB collection cache, and indexes chunks if needed.
-3. **`POST /api/chat`**:
-   - Request: `{"question": "Is this book for IELTS?", "filename": "Cambridge_21.pdf"}`
-   - Response:
-     ```json
-     {
-       "answer": "Yes, this book contains authentic examination papers for IELTS preparation...",
-       "sources": [5, 10],
-       "decision": {
-         "query_type": "document_question",
-         "should_retrieve": true,
-         "should_generate": true,
-         "context_quality": "sufficient",
-         "confidence": 0.94,
-         "noul_sufficiency": 0.91,
-         "engine": "typesafe-jev (jev-latest)",
-         "is_fallback": false,
-         "retrieved_count": 3,
-         "top_page": 5,
-         "top_distance": 1.0147
-       }
-     }
-     ```
-
-> **Security Guarantee:** `TYPESAFE_API_KEY` and `GEMINI_API_KEY` remain backend-side only. They are never sent to the Astro frontend or browser client.
-
----
-
-## 5. Educational Decision Trace Mode
-
-The Astro frontend features a dedicated **⚡ Trace: ON/OFF** toggle in the chat header.
-
-When enabled, each assistant response displays a sleek decision badge and collapsible trace card showing:
-- **Query Classification:** `document_question`, `greeting`, etc.
-- **Retrieval Action:** Chunks searched vs. bypassed.
-- **Context Quality Badge:** `sufficient`, `insufficient`, or `uncertain`.
-- **Generation Permission:** `Allowed` vs. `Blocked`.
-- **Top Result Metrics:** Page number, semantic distance, and chunk count.
-
-When disabled, users enjoy a distraction-free, polished conversational experience with subtle live status text (*"Evaluating query intent..."*, *"Searching ChromaDB..."*, *"Verifying context sufficiency..."*).
-
----
-
-## 6. Installation & Setup
-
-### 1. Python Environment (Backend)
-Requires Python 3.10+ (Python 3.12 recommended):
-
-```bash
-# Create and activate virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install dependencies (includes typesafe-sdk, chromadb, google-genai, fastapi)
-pip install -r requirements.txt
-```
-
-### 2. Node.js Environment (Frontend)
-Requires Node 18+:
-
-```bash
-cd frontend
-npm install
-cd ..
-```
-
-### 3. Environment Variables
-Create a `.env` file in the root directory:
+Create a `.env` file in the project root:
 
 ```bash
 cp .env.example .env
 ```
 
-Configure your API keys:
+Set your configuration:
 
 ```env
-# Google Gemini API Key (Required for natural language answer generation)
+# Google Gemini API Key (Answer Generation)
 GEMINI_API_KEY=your_gemini_api_key_here
 GEMINI_MODEL=gemini-2.5-flash
 
-# TypeSafe AI Jev API Key (Required for Jev decision-making layer)
-TYPESAFE_API_KEY=your_typesafe_api_key_here
-TYPESAFE_MODEL=jev-latest
+# OpenRouter API Key (Decision Layer via Jev)
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+
+# OpenRouter Jev Model Identifier
+JEV_MODEL=~typesafe/jev-latest
+
+# Optional Development Debugging
+DEBUG_DECISIONS=true
 ```
 
-*(Note: If `TYPESAFE_API_KEY` is not provided, the application automatically runs in conservative fallback mode without crashing).*
+> **Security Guarantee:** `OPENROUTER_API_KEY` and `GEMINI_API_KEY` are loaded strictly backend-side. They are never sent to the browser or exposed to Astro frontend templates.
 
 ---
 
-## 7. Running the Application
+## 10. Installation & Running
 
-### Option A: Web Application (Astro + FastAPI)
+### 1. Backend Setup
+```bash
+# Activate virtual environment
+source .venv/bin/activate
 
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### 2. Verify OpenRouter Jev API in Isolation
+Run the standalone test script to verify your OpenRouter key and model connection:
+```bash
+python test_jev.py
+```
+
+Expected output:
+```text
+HTTP Status: 200
+✅ Successfully received decisions response from OpenRouter:
+  [is_question] Noul Probability: 0.99
+  [topic] Choice: geography (conf: 1)
+>>> OpenRouter Decisions API verification PASSED! <<<
+```
+
+### 3. Run the Web Application
 Open two terminal tabs:
 
-**Terminal 1 (Backend API):**
+**Terminal 1 (FastAPI Backend):**
 ```bash
 source .venv/bin/activate
 cd backend
 uvicorn main:app --reload --port 8000
 ```
-*Backend runs on: `http://localhost:8000`*
 
-**Terminal 2 (Frontend UI):**
+**Terminal 2 (Astro Frontend):**
 ```bash
 cd frontend
 npm run dev
 ```
-*Frontend runs on: `http://localhost:4321`*
 
 Open **http://localhost:4321** in your browser.
 
----
-
-### Option B: Terminal CLI Runner
-
-Run the interactive terminal interface directly:
-
+### 4. Run the Terminal CLI
 ```bash
 source .venv/bin/activate
 python main.py
@@ -371,21 +323,20 @@ python main.py
 
 ---
 
-## 8. Verification & Test Suite
+## 11. Verification & Test Suite
 
 The system has been verified against all 6 master test cases:
 
-| Test Case | Query | Jev Intent | ChromaDB Retrieval | Jev Context Quality | Gemini Generation | Result |
+| Test Case | Input | Route | Retrieval Used | Context Sufficient | Gemini Called | Expected Behavior |
 |---|---|---|---|---|---|---|
-| **Test 1: Greeting** | `"Hi"` | `greeting` | ❌ Bypassed | N/A | ❌ Bypassed | Returns greeting immediately. No DB or LLM call. |
-| **Test 2: Document Question** | `"Is this book for IELTS?"` | `document_question` | ✅ Retrieved (3 chunks) | `sufficient` | ✅ Allowed | Answers with source pages `[5, 10]`. |
-| **Test 3: Specific Question** | `"What are the four components of IELTS?"` | `document_question` | ✅ Retrieved (3 chunks) | `sufficient` | ✅ Allowed | Explains Listening, Reading, Writing, Speaking (`[5, 8, 10]`). |
-| **Test 4: Out-of-Document** | `"What is the population of Germany?"` | `document_question` | ✅ Retrieved (3 chunks) | `insufficient` | ❌ Blocked | Returns: *"I couldn't find enough information about that in the selected PDF."* |
-| **Test 5: Unsupported Task** | `"Write me a Python game."` | `unsupported` | ❌ Bypassed | N/A | ❌ Bypassed | Refuses politely. No DB or LLM call. |
-| **Test 6: Empty Query** | `""` | N/A | ❌ Bypassed | N/A | ❌ Bypassed | HTTP 400 Bad Request validation error. |
+| **Test 1: Greeting** | `"Hi"` | `greeting` | ❌ No | ❌ No | ❌ No | Immediate greeting. No DB or LLM call. |
+| **Test 2: Document Question** | `"Is this book for IELTS?"` | `document_question` | ✅ Yes (3 chunks) | ✅ Yes | ✅ Yes | Grounded answer with source pages `[5, 10]`. |
+| **Test 3: Detailed Question** | `"What are the four sections of IELTS?"` | `document_question` | ✅ Yes (3 chunks) | ✅ Yes | ✅ Yes | Details Listening, Reading, Writing, Speaking (`[5, 8, 10]`). |
+| **Test 4: Outside Document** | `"What is the population of Germany?"` | `document_question` | ✅ Yes (3 chunks) | ❌ No | ❌ No | Refusal: *"I couldn't find enough information about that in the selected PDF."* |
+| **Test 5: Unsupported Task** | `"Write me a Python game."` | `unsupported` | ❌ No | ❌ No | ❌ No | Polite refusal. No DB or LLM call. |
+| **Test 6: Empty Query** | `""` | N/A | ❌ No | ❌ No | ❌ No | HTTP 400 Bad Request validation error. |
 
-To run the automated verification script:
-
+To run the automated test suite:
 ```bash
 source .venv/bin/activate
 python -c '
@@ -396,21 +347,15 @@ client = TestClient(app)
 client.post("/api/documents/select", json={"filename": "Cambridge_21.pdf"})
 
 # Run tests
-t1 = client.post("/api/chat", json={"question": "Hi", "filename": "Cambridge_21.pdf"}).json()
-assert t1["decision"]["query_type"] == "greeting" and t1["decision"]["should_retrieve"] == False
+t1 = client.post("/api/chat", json={"question": "Hi"}).json()
+assert t1["decision"]["route"] == "greeting" and not t1["decision"]["retrieval_used"]
 
-t2 = client.post("/api/chat", json={"question": "Is this book for IELTS?", "filename": "Cambridge_21.pdf"}).json()
-assert t2["decision"]["context_quality"] == "sufficient" and t2["decision"]["should_generate"] == True
+t2 = client.post("/api/chat", json={"question": "Is this book for IELTS?"}).json()
+assert t2["decision"]["context_sufficient"] and len(t2["sources"]) > 0
 
-t4 = client.post("/api/chat", json={"question": "What is the population of Germany?", "filename": "Cambridge_21.pdf"}).json()
-assert t4["decision"]["context_quality"] == "insufficient" and t4["decision"]["should_generate"] == False
-print("Verification complete: All tests passed!")
+t4 = client.post("/api/chat", json={"question": "What is the population of Germany?"}).json()
+assert not t4["decision"]["context_sufficient"] and not t4["decision"]["should_generate"]
+
+print("All 6 OpenRouter Jev tests PASSED!")
 '
 ```
-
----
-
-## 9. Known Limitations
-
-- **Single-Turn Scope:** The backend processes each question independently without an external conversational memory database. The frontend preserves client-side chat bubbles for continuity. If a user asks *"What is IELTS?"* followed by *"What are its four components?"*, the second question is embedded directly.
-- **Text-Only PDFs:** The pipeline extracts text via PyMuPDF. Scanned PDFs containing only bitmap images require an external OCR pre-processing step.

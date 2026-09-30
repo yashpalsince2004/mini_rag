@@ -1,24 +1,29 @@
+"""
+backend/jev_decisions.py - TypeSafe Jev Decision Layer via OpenRouter Decisions API.
+
+Responsibilities:
+1. Decision 1 (Query Routing): Classifies user query into typed categories (document_question, greeting, help, unsupported, clarification_needed).
+2. Decision 2 (Retrieval Gating): Decides whether ChromaDB vector search should execute.
+3. Decision 3 (Context Quality): Evaluates if retrieved chunks contain sufficient factual evidence.
+4. Decision 4 (Generation Gating): Authorizes or blocks LLM (Gemini) answer synthesis.
+5. Error Handling & Conservative Fallback: Safely degrades to deterministic local heuristics when OpenRouter is offline or unconfigured, preventing hallucinations.
+"""
+
 import os
 import re
 from dataclasses import dataclass, asdict
-from typing import Optional
-from dotenv import load_dotenv
+from typing import Optional, Any
 from pathlib import Path
+from dotenv import load_dotenv
+import httpx
 
 # Load environment variables
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
-try:
-    from typesafe_sdk import Choice, Noul, NoulCriteria, TypeSafeClient
-    from typesafe_sdk._core.errors import TypeSafeError, TypeSafeAPIError
-    TYPESAFE_SDK_AVAILABLE = True
-except ImportError:
-    TYPESAFE_SDK_AVAILABLE = False
-    Choice, Noul, NoulCriteria, TypeSafeClient = None, None, None, None
-    TypeSafeError, TypeSafeAPIError = Exception, Exception
-
-TYPESAFE_MODEL = os.getenv("TYPESAFE_MODEL", "jev-latest")
+# OpenRouter Decisions API configuration
+OPENROUTER_DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
+DEFAULT_JEV_MODEL = os.getenv("JEV_MODEL", "~typesafe/jev-latest")
 
 
 # =====================================================================
@@ -32,7 +37,7 @@ class RoutingDecision:
     confidence: float
     probabilities: dict[str, float]
     is_fallback: bool = False
-    engine: str = "typesafe-jev"
+    engine: str = "openrouter-jev"
     reason: Optional[str] = None
 
     def to_dict(self) -> dict:
@@ -47,7 +52,7 @@ class ContextSufficiencyDecision:
     probabilities: dict[str, float]
     noul_sufficiency: Optional[float] = None
     is_fallback: bool = False
-    engine: str = "typesafe-jev"
+    engine: str = "openrouter-jev"
     reason: Optional[str] = None
 
     def to_dict(self) -> dict:
@@ -55,42 +60,209 @@ class ContextSufficiencyDecision:
 
 
 # =====================================================================
-# Jev Client Factory
+# Reusable OpenRouter Jev Client
 # =====================================================================
 
-def get_typesafe_client() -> Optional[TypeSafeClient]:
+class JevClient:
     """
-    Returns an initialized TypeSafeClient if TYPESAFE_API_KEY is available.
-    Returns None if not configured or SDK is unavailable.
+    Lightweight client for interacting with TypeSafe Jev System One decision models
+    via OpenRouter's specialized Decisions API (POST /api/alpha/decisions).
     """
-    api_key = os.getenv("TYPESAFE_API_KEY")
-    if not api_key or not TYPESAFE_SDK_AVAILABLE:
+    def __init__(
+        self,
+        api_key: str,
+        model: Optional[str] = None,
+        base_url: str = OPENROUTER_DECISIONS_URL,
+        timeout: float = 15.0
+    ):
+        self.api_key = api_key.strip()
+        self.model = model or os.getenv("JEV_MODEL", DEFAULT_JEV_MODEL)
+        self.base_url = base_url
+        self.timeout = timeout
+        self.headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "http://localhost:8000",
+            "X-Title": "Mini PDF RAG Chatbot"
+        }
+
+    def decide(self, state: Any, questions: dict) -> dict:
+        """
+        Sends a typed decision request to OpenRouter's Decisions endpoint.
+        Returns the parsed 'answers' dictionary from the response.
+        Raises RuntimeError on API failure.
+        """
+        payload = {
+            "model": self.model,
+            "state": state,
+            "questions": questions
+        }
+
+        with httpx.Client(timeout=self.timeout) as client:
+            response = client.post(self.base_url, json=payload, headers=self.headers)
+            
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"OpenRouter Decisions API error ({response.status_code}): {response.text}"
+                )
+
+            data = response.json()
+            answers = data.get("answers")
+            if not answers:
+                raise RuntimeError(f"OpenRouter response missing 'answers' field: {data}")
+
+            return answers
+
+    def classify_query(self, query: str, filename: Optional[str] = None) -> RoutingDecision:
+        """
+        Sends Decision 1 (intent classification) and Decision 2 (retrieval gating) to Jev.
+        """
+        state = {
+            "user_query": query,
+            "active_document": filename or "Selected document"
+        }
+
+        questions = {
+            "query_type": {
+                "type": "choice",
+                "instructions": "Classify the user query intent for a document question-answering assistant.",
+                "criteria": {
+                    "document_question": "Questions asking about information, facts, concepts, or details that can be answered from the document or PDF.",
+                    "greeting": "Casual greetings, hellos, good mornings, or introductory pleasantries.",
+                    "help": "Asking how to use this tool, what it does, or asking for instructions on using the assistant.",
+                    "unsupported": "Out-of-scope requests such as writing code, generating creative stories, checking real-time weather, or general knowledge unrelated to documents.",
+                    "clarification_needed": "Empty, garbled, or completely ambiguous input that cannot be interpreted without clarification."
+                }
+            },
+            "should_retrieve": {
+                "type": "noul",
+                "instructions": "Should the assistant perform semantic retrieval from the selected document to answer this query?",
+                "criteria": {
+                    "true": "The user is asking a factual question about the document content, topics, or subject matter (e.g. book details, tests, rules, sections, scores).",
+                    "false": "The query is a greeting, polite phrase, help request, coding instruction, or unrelated request that does not need document retrieval."
+                }
+            }
+        }
+
+        answers = self.decide(state=state, questions=questions)
+        choice_ans = answers.get("query_type", {})
+        noul_ans = answers.get("should_retrieve", {})
+
+        # Extract choice results
+        selected_choice = choice_ans.get("choice", "document_question")
+        conf = float(choice_ans.get("confidence", 0.90))
+        probs = {k: float(v) for k, v in choice_ans.get("probabilities", {}).items()}
+
+        # Extract noul probability (handles both 'probability' and 'noul' keys)
+        noul_val = noul_ans.get("probability", noul_ans.get("noul", 0.5))
+        noul_prob = float(noul_val) if noul_val is not None else 0.5
+
+        # Retrieval gating rule
+        should_retrieve = (selected_choice == "document_question") and (noul_prob >= 0.35)
+
+        return RoutingDecision(
+            query_type=selected_choice,
+            should_retrieve=should_retrieve,
+            confidence=conf,
+            probabilities=probs,
+            is_fallback=False,
+            engine=f"openrouter-jev ({self.model})",
+            reason=f"Jev classified query as {selected_choice} (retrieve noul: {noul_prob:.2f})."
+        )
+
+    def evaluate_context(
+        self,
+        query: str,
+        retrieved_chunks: list[dict],
+        filename: Optional[str] = None
+    ) -> ContextSufficiencyDecision:
+        """
+        Sends Decision 3 (context quality) and Decision 4 (generation gating) to Jev.
+        """
+        state = {
+            "question": query,
+            "document": filename or "Selected document",
+            "retrieved_chunks": [
+                {
+                    "chunk_index": i + 1,
+                    "page": chunk.get("page", 0),
+                    "distance": round(chunk["distance"], 4) if chunk.get("distance") is not None else None,
+                    "text": chunk.get("text", "")
+                }
+                for i, chunk in enumerate(retrieved_chunks)
+            ]
+        }
+
+        questions = {
+            "context_quality": {
+                "type": "choice",
+                "instructions": "Based on the retrieved document chunks, does the context contain sufficient factual information to answer the user's question accurately?",
+                "criteria": {
+                    "sufficient": "The retrieved chunks explicitly state facts, details, or explanations that directly address the question.",
+                    "insufficient": "The retrieved chunks do not contain enough information to answer the question, or are only tangentially related.",
+                    "uncertain": "The chunks partially touch upon the topic but are missing crucial facts or leave the answer ambiguous."
+                }
+            },
+            "should_generate": {
+                "type": "noul",
+                "instructions": "Should the answering model be allowed to generate a factual answer based on these retrieved chunks?",
+                "criteria": {
+                    "true": "The retrieved chunks contain verifiable evidence to answer the question without hallucination.",
+                    "false": "The retrieved chunks lack necessary facts; answering would require guessing or hallucinating."
+                }
+            }
+        }
+
+        answers = self.decide(state=state, questions=questions)
+        choice_ans = answers.get("context_quality", {})
+        noul_ans = answers.get("should_generate", {})
+
+        selected_quality = choice_ans.get("choice", "insufficient")
+        conf = float(choice_ans.get("confidence", 0.85))
+        probs = {k: float(v) for k, v in choice_ans.get("probabilities", {}).items()}
+
+        noul_val = noul_ans.get("probability", noul_ans.get("noul", 0.5))
+        noul_prob = float(noul_val) if noul_val is not None else 0.5
+
+        # Generation control rule
+        should_generate = (selected_quality == "sufficient") or (selected_quality == "uncertain" and noul_prob >= 0.65)
+
+        return ContextSufficiencyDecision(
+            context_quality=selected_quality,
+            should_generate=should_generate,
+            confidence=conf,
+            probabilities=probs,
+            noul_sufficiency=noul_prob,
+            is_fallback=False,
+            engine=f"openrouter-jev ({self.model})",
+            reason=f"Context evaluated as {selected_quality} (noul probability: {noul_prob:.2f})."
+        )
+
+
+# =====================================================================
+# Client Factory
+# =====================================================================
+
+def get_jev_client() -> Optional[JevClient]:
+    """
+    Returns an initialized JevClient if OPENROUTER_API_KEY is configured.
+    Returns None if missing or placeholder.
+    """
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    if not api_key or api_key.strip().startswith("your_"):
         return None
 
     try:
-        return TypeSafeClient(api_key=api_key.strip(), model=TYPESAFE_MODEL)
+        model = os.getenv("JEV_MODEL", DEFAULT_JEV_MODEL)
+        return JevClient(api_key=api_key.strip(), model=model)
     except Exception as e:
-        print(f"[JEV] Warning: Failed to initialize TypeSafeClient ({e}). Falling back.")
+        print(f"[JEV] Warning: Failed to initialize JevClient ({e}). Falling back.")
         return None
 
 
 # =====================================================================
-# Decision 1 & 2: Query Routing and Retrieval Gating
+# Public Pipeline Decision Functions
 # =====================================================================
-
-ROUTING_QUESTIONS = {
-    "query_type": Choice(
-        instructions="Classify the user query intent for a document question-answering assistant.",
-        criteria={
-            "document_question": "Questions asking about information, facts, concepts, or details from the document or PDF.",
-            "greeting": "Casual greetings, hellos, good mornings, or introductory pleasantries.",
-            "help": "Asking how to use this tool, what it does, or asking for instructions on using the assistant.",
-            "unsupported": "Out-of-scope requests such as writing software, generating creative stories, checking real-time weather, or general knowledge unrelated to documents.",
-            "clarification_needed": "Empty, garbled, or completely ambiguous input that cannot be interpreted without clarification."
-        }
-    )
-} if TYPESAFE_SDK_AVAILABLE else {}
-
 
 def classify_query_intent(query: str, filename: Optional[str] = None) -> RoutingDecision:
     """
@@ -109,57 +281,78 @@ def classify_query_intent(query: str, filename: Optional[str] = None) -> Routing
             reason="Query is empty."
         )
 
-    client = get_typesafe_client()
-
+    client = get_jev_client()
     if client:
         try:
-            print(f"[JEV] Invoking System One model ({TYPESAFE_MODEL}) for query classification...")
-            state = {
-                "user_query": trimmed,
-                "active_document": filename or "No document loaded"
-            }
-            response = client.system_one(
-                state=state,
-                questions=ROUTING_QUESTIONS,
-                model=TYPESAFE_MODEL
-            )
-
-            answer = response.answers["query_type"]
-            chosen = answer.choice
-            conf = float(answer.confidence)
-            probs = {k: float(v) for k, v in answer.probabilities.items()}
-
-            should_retrieve = (chosen == "document_question")
-
-            print(f"[JEV] Query classification: {chosen} (confidence: {conf:.2f})")
-            print(f"[JEV] Retrieval decision: {'yes' if should_retrieve else 'no'}")
-
-            return RoutingDecision(
-                query_type=chosen,
-                should_retrieve=should_retrieve,
-                confidence=conf,
-                probabilities=probs,
-                is_fallback=False,
-                engine=f"typesafe-jev ({TYPESAFE_MODEL})",
-                reason=f"Jev classified query as {chosen} with {conf:.2f} confidence."
-            )
+            print(f"[JEV] Invoking OpenRouter Jev model ({client.model}) for query classification...")
+            decision = client.classify_query(trimmed, filename=filename)
+            print(f"[JEV] Query route: {decision.query_type}")
+            print(f"[JEV] Retrieval required: {'true' if decision.should_retrieve else 'false'}")
+            return decision
         except Exception as e:
-            print(f"[JEV] Warning: TypeSafe API call failed ({e}). Using conservative fallback.")
+            print(f"[JEV] Warning: OpenRouter API call failed ({e}). Using conservative fallback.")
 
-    # Conservative Heuristic Fallback when Jev is offline / unconfigured
-    return _fallback_query_routing(trimmed)
+    # Graceful deterministic fallback when OPENROUTER_API_KEY is unset or API fails
+    decision = _fallback_query_routing(trimmed)
+    print(f"[JEV] Query route: {decision.query_type}")
+    print(f"[JEV] Retrieval required: {'true' if decision.should_retrieve else 'false'}")
+    return decision
 
+
+def evaluate_context_sufficiency(
+    query: str,
+    retrieved_chunks: list[dict],
+    filename: Optional[str] = None
+) -> ContextSufficiencyDecision:
+    """
+    Decision 3: Assesses retrieval quality over the top-K chunks.
+    Decision 4: Decides whether LLM generation should proceed.
+    """
+    if not retrieved_chunks:
+        print("[JEV] Context sufficient: false (no chunks retrieved)")
+        return ContextSufficiencyDecision(
+            context_quality="insufficient",
+            should_generate=False,
+            confidence=1.0,
+            probabilities={"insufficient": 1.0, "sufficient": 0.0, "uncertain": 0.0},
+            noul_sufficiency=0.0,
+            is_fallback=True,
+            engine="validator",
+            reason="No chunks retrieved from ChromaDB."
+        )
+
+    client = get_jev_client()
+    if client:
+        try:
+            print(f"[JEV] Invoking OpenRouter Jev model ({client.model}) for context sufficiency assessment...")
+            decision = client.evaluate_context(query, retrieved_chunks, filename=filename)
+            is_suff = (decision.context_quality == "sufficient")
+            print(f"[JEV] Context sufficient: {'true' if is_suff else 'false'}")
+            return decision
+        except Exception as e:
+            print(f"[JEV] Warning: OpenRouter API call failed ({e}). Using conservative fallback.")
+
+    # Graceful deterministic fallback when OPENROUTER_API_KEY is unset or API fails
+    decision = _fallback_context_sufficiency(query, retrieved_chunks)
+    is_suff = (decision.context_quality == "sufficient")
+    print(f"[JEV] Context sufficient: {'true' if is_suff else 'false'}")
+    return decision
+
+
+# =====================================================================
+# Conservative Local Heuristic Fallbacks (Zero Hallucination Guarantee)
+# =====================================================================
 
 def _fallback_query_routing(query: str) -> RoutingDecision:
-    """Deterministic fallback that mimics Jev's routing criteria when API key is unset."""
+    """
+    Deterministic fallback that mimics Jev's routing criteria when OpenRouter is unconfigured.
+    """
     lower = query.lower().strip()
     clean = re.sub(r'[^\w\s]', '', lower)
 
     # Greeting check
     greeting_tokens = {"hi", "hello", "hey", "hiya", "howdy", "good morning", "good evening", "good afternoon"}
     if clean in greeting_tokens or clean.startswith("hello ") or clean.startswith("hi "):
-        print(f"[JEV-FALLBACK] Query classification: greeting (confidence: 0.95)")
-        print(f"[JEV-FALLBACK] Retrieval decision: no")
         return RoutingDecision(
             query_type="greeting",
             should_retrieve=False,
@@ -172,8 +365,6 @@ def _fallback_query_routing(query: str) -> RoutingDecision:
 
     # Help check
     if clean in {"help", "how does this work", "what can you do", "instructions"} or "how do i use" in clean:
-        print(f"[JEV-FALLBACK] Query classification: help (confidence: 0.90)")
-        print(f"[JEV-FALLBACK] Retrieval decision: no")
         return RoutingDecision(
             query_type="help",
             should_retrieve=False,
@@ -192,8 +383,6 @@ def _fallback_query_routing(query: str) -> RoutingDecision:
     ]
     for pattern in unsupported_patterns:
         if re.search(pattern, lower):
-            print(f"[JEV-FALLBACK] Query classification: unsupported (confidence: 0.92)")
-            print(f"[JEV-FALLBACK] Retrieval decision: no")
             return RoutingDecision(
                 query_type="unsupported",
                 should_retrieve=False,
@@ -205,8 +394,6 @@ def _fallback_query_routing(query: str) -> RoutingDecision:
             )
 
     # Default to document question
-    print(f"[JEV-FALLBACK] Query classification: document_question (confidence: 0.85)")
-    print(f"[JEV-FALLBACK] Retrieval decision: yes")
     return RoutingDecision(
         query_type="document_question",
         should_retrieve=True,
@@ -216,107 +403,6 @@ def _fallback_query_routing(query: str) -> RoutingDecision:
         engine="fallback-heuristic",
         reason="Query treated as document question for retrieval."
     )
-
-
-# =====================================================================
-# Decision 3 & 4: Retrieval Quality and Generation Gating
-# =====================================================================
-
-CONTEXT_QUESTIONS = {
-    "context_quality": Choice(
-        instructions="Based on the retrieved document chunks, does the context contain sufficient factual information to answer the user's question accurately?",
-        criteria={
-            "sufficient": "The retrieved chunks explicitly state facts, details, or explanations that directly address the question.",
-            "insufficient": "The retrieved chunks do not contain enough information to answer the question, or are only tangentially related.",
-            "uncertain": "The chunks partially touch upon the topic but are missing crucial facts or leave the answer ambiguous."
-        }
-    ),
-    "should_generate": Noul(
-        instructions="Should the answering model be allowed to generate a factual answer based on these retrieved chunks?",
-        criteria=NoulCriteria(
-            true="The retrieved chunks contain verifiable evidence to answer the question without hallucination.",
-            false="The retrieved chunks lack the necessary facts, so generating an answer would require guessing or hallucinating."
-        )
-    )
-} if TYPESAFE_SDK_AVAILABLE else {}
-
-
-def evaluate_context_sufficiency(
-    query: str,
-    retrieved_chunks: list[dict],
-    filename: Optional[str] = None
-) -> ContextSufficiencyDecision:
-    """
-    Decision 3: Assesses retrieval quality over the top-K chunks.
-    Decision 4: Decides whether LLM generation should proceed.
-    """
-    if not retrieved_chunks:
-        print("[JEV] Context quality: insufficient (no chunks retrieved)")
-        return ContextSufficiencyDecision(
-            context_quality="insufficient",
-            should_generate=False,
-            confidence=1.0,
-            probabilities={"insufficient": 1.0, "sufficient": 0.0, "uncertain": 0.0},
-            noul_sufficiency=0.0,
-            is_fallback=True,
-            engine="validator",
-            reason="No chunks retrieved from ChromaDB."
-        )
-
-    # Format state for Jev
-    client = get_typesafe_client()
-    if client:
-        try:
-            print(f"[JEV] Invoking System One model ({TYPESAFE_MODEL}) for context sufficiency assessment...")
-            state = {
-                "question": query,
-                "document": filename or "Selected document",
-                "retrieved_chunks": [
-                    {
-                        "chunk_index": i + 1,
-                        "page": chunk["page"],
-                        "distance": round(chunk["distance"], 4) if chunk.get("distance") is not None else None,
-                        "text": chunk["text"]
-                    }
-                    for i, chunk in enumerate(retrieved_chunks)
-                ]
-            }
-
-            response = client.system_one(
-                state=state,
-                questions=CONTEXT_QUESTIONS,
-                model=TYPESAFE_MODEL
-            )
-
-            choice_ans = response.answers["context_quality"]
-            noul_ans = response.answers["should_generate"]
-
-            chosen_quality = choice_ans.choice
-            conf = float(choice_ans.confidence)
-            probs = {k: float(v) for k, v in choice_ans.probabilities.items()}
-            noul_prob = float(noul_ans.noul)
-
-            # Generation rule: allow generation if sufficient, or if uncertain with high noul (>0.6)
-            should_generate = (chosen_quality == "sufficient") or (chosen_quality == "uncertain" and noul_prob >= 0.65)
-
-            print(f"[JEV] Context quality: {chosen_quality} (confidence: {conf:.2f}, noul_prob: {noul_prob:.2f})")
-            print(f"[JEV] Generation decision: {'yes' if should_generate else 'no'}")
-
-            return ContextSufficiencyDecision(
-                context_quality=chosen_quality,
-                should_generate=should_generate,
-                confidence=conf,
-                probabilities=probs,
-                noul_sufficiency=noul_prob,
-                is_fallback=False,
-                engine=f"typesafe-jev ({TYPESAFE_MODEL})",
-                reason=f"Context evaluated as {chosen_quality} (noul probability: {noul_prob:.2f})."
-            )
-        except Exception as e:
-            print(f"[JEV] Warning: TypeSafe API call failed ({e}). Using conservative fallback.")
-
-    # Conservative Heuristic Fallback when Jev is offline / unconfigured
-    return _fallback_context_sufficiency(query, retrieved_chunks)
 
 
 # Comprehensive English stop words to accurately isolate query entities/topics
@@ -339,9 +425,8 @@ FALLBACK_STOP_WORDS = {
 def _fallback_context_sufficiency(query: str, retrieved_chunks: list[dict]) -> ContextSufficiencyDecision:
     """
     Conservative fallback that inspects semantic retrieval distance and query keyword presence
-    to prevent hallucinations when Jev is offline or unconfigured.
+    to prevent hallucinations when OpenRouter Jev is offline or unconfigured.
     """
-    # Extract significant query words (ignoring grammatical stop words)
     tokens = re.findall(r"\b[a-zA-Z0-9_\-]{2,}\b", query.lower())
     significant_words = [w for w in tokens if w not in FALLBACK_STOP_WORDS]
     if not significant_words:
@@ -379,9 +464,6 @@ def _fallback_context_sufficiency(query: str, retrieved_chunks: list[dict]) -> C
         probs = {"uncertain": 0.65, "sufficient": 0.15, "insufficient": 0.20}
         noul_val = 0.40
         reason = f"Context relevance is borderline (distance: {min_dist:.2f}); defaulting to safe non-generation."
-
-    print(f"[JEV-FALLBACK] Context quality: {quality} (overlap: {overlap_ratio:.2f}, min_dist: {min_dist:.2f})")
-    print(f"[JEV-FALLBACK] Generation decision: {'yes' if should_generate else 'no'}")
 
     return ContextSufficiencyDecision(
         context_quality=quality,

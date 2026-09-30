@@ -5,4 +5,5 @@ pymupdf
 sentence-transformers
 google-genai
 python-dotenv
+httpx>=0.27.0
 typesafe-sdk>=0.7.0

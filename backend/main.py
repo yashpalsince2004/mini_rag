@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Optional
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,7 +25,7 @@ try:
     from jev_decisions import (
         classify_query_intent,
         evaluate_context_sufficiency,
-        TYPESAFE_MODEL,
+        DEFAULT_JEV_MODEL,
     )
 except ImportError:
     from .rag import (
@@ -41,13 +42,13 @@ except ImportError:
     from .jev_decisions import (
         classify_query_intent,
         evaluate_context_sufficiency,
-        TYPESAFE_MODEL,
+        DEFAULT_JEV_MODEL,
     )
 
 # Initialize FastAPI App
 app = FastAPI(
-    title="Mini RAG API with Jev Decision Layer",
-    description="Educational RAG Backend powered by ChromaDB, TypeSafe Jev, and Google Gemini"
+    title="Mini RAG API with Jev Decision Layer via OpenRouter",
+    description="Educational RAG Backend powered by ChromaDB, TypeSafe Jev (OpenRouter), and Google Gemini"
 )
 
 # Configure CORS so Astro frontend (http://localhost:4321) can communicate with backend
@@ -68,8 +69,9 @@ class DocumentSelectRequest(BaseModel):
     filename: str
 
 class ChatRequest(BaseModel):
-    filename: str
-    question: str
+    filename: Optional[str] = None
+    question: Optional[str] = None
+    message: Optional[str] = None
 
 
 # =====================================================================
@@ -79,9 +81,13 @@ class ChatRequest(BaseModel):
 @app.get("/api/health")
 def health_check():
     """Health check endpoint to verify backend service and configuration status."""
+    has_openrouter = bool(
+        os.getenv("OPENROUTER_API_KEY") and not os.getenv("OPENROUTER_API_KEY").strip().startswith("your_")
+    )
     return {
         "status": "ok",
-        "typesafe_model": TYPESAFE_MODEL,
+        "jev_model": os.getenv("JEV_MODEL", DEFAULT_JEV_MODEL),
+        "openrouter_configured": has_openrouter,
         "gemini_model": GEMINI_MODEL,
         "documents_dir": str(DOCUMENTS_DIR)
     }
@@ -141,96 +147,123 @@ def select_document(request: DocumentSelectRequest):
 @app.post("/api/chat")
 def chat(request: ChatRequest):
     """
-    Executes the Jev-orchestrated RAG pipeline:
+    Executes the Jev-orchestrated RAG pipeline via OpenRouter:
     1. Jev classifies query intent (Decision 1) & gates retrieval (Decision 2).
     2. Non-document queries return immediately (no retrieval, no generation).
     3. ChromaDB retrieves top-K chunks for document questions.
     4. Jev evaluates context quality & sufficiency (Decision 3 & 4).
     5. Gemini generates answer only if context is sufficient.
     """
-    question = request.question.strip() if request.question else ""
+    raw_query = request.question or request.message or ""
+    question = raw_query.strip()
     if not question:
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
-    validate_pdf_path(request.filename)
-    collection_name = get_collection_name(request.filename)
+    target_doc = request.filename or "Cambridge_21.pdf"
+    validate_pdf_path(target_doc)
+    collection_name = get_collection_name(target_doc)
+    debug_mode = os.getenv("DEBUG_DECISIONS", "true").lower() in ("true", "1", "yes")
 
     print("\n" + "=" * 50)
     print(f"Incoming Query: '{question}'")
-    print(f"Document: {request.filename}")
+    print(f"Document: {target_doc}")
     print("=" * 50)
 
     # -------------------------------------------------------------
     # 1. Jev Decision 1 & 2: Query Routing and Retrieval Gating
     # -------------------------------------------------------------
-    routing = classify_query_intent(question, filename=request.filename)
+    routing = classify_query_intent(question, filename=target_doc)
 
     if routing.query_type == "greeting":
-        return {
-            "answer": "Hello! Ask me anything about the selected PDF.",
-            "sources": [],
-            "decision": {
-                "query_type": routing.query_type,
-                "should_retrieve": False,
-                "should_generate": False,
-                "context_quality": "n/a",
-                "confidence": routing.confidence,
-                "engine": routing.engine,
-                "is_fallback": routing.is_fallback
-            }
+        decision_data = {
+            "route": routing.query_type,
+            "retrieval_used": False,
+            "context_sufficient": False,
+            "query_type": routing.query_type,
+            "should_retrieve": False,
+            "should_generate": False,
+            "context_quality": "n/a",
+            "confidence": routing.confidence,
+            "engine": routing.engine,
+            "is_fallback": routing.is_fallback
         }
+        res = {
+            "answer": "Hello! Ask me anything about the selected PDF.",
+            "sources": []
+        }
+        if debug_mode:
+            res["decision"] = decision_data
+        return res
 
     if routing.query_type == "help":
-        return {
+        decision_data = {
+            "route": routing.query_type,
+            "retrieval_used": False,
+            "context_sufficient": False,
+            "query_type": routing.query_type,
+            "should_retrieve": False,
+            "should_generate": False,
+            "context_quality": "n/a",
+            "confidence": routing.confidence,
+            "engine": routing.engine,
+            "is_fallback": routing.is_fallback
+        }
+        res = {
             "answer": (
                 "I am an educational RAG assistant.\n\n"
                 "1. Select a PDF from the dropdown above.\n"
                 "2. Click **Load Document** to index chunks in ChromaDB.\n"
                 "3. Ask any question about its contents.\n\n"
-                "TypeSafe Jev evaluates your query to prevent unnecessary retrieval, "
+                "TypeSafe Jev evaluates your query via OpenRouter to prevent unnecessary retrieval, "
                 "verifies retrieved context, and Google Gemini generates verified answers."
             ),
-            "sources": [],
-            "decision": {
-                "query_type": routing.query_type,
-                "should_retrieve": False,
-                "should_generate": False,
-                "context_quality": "n/a",
-                "confidence": routing.confidence,
-                "engine": routing.engine,
-                "is_fallback": routing.is_fallback
-            }
+            "sources": []
         }
+        if debug_mode:
+            res["decision"] = decision_data
+        return res
 
     if routing.query_type == "unsupported":
-        return {
-            "answer": "I can only answer questions based on the selected PDF document. Please ask a question related to its content.",
-            "sources": [],
-            "decision": {
-                "query_type": routing.query_type,
-                "should_retrieve": False,
-                "should_generate": False,
-                "context_quality": "n/a",
-                "confidence": routing.confidence,
-                "engine": routing.engine,
-                "is_fallback": routing.is_fallback
-            }
+        decision_data = {
+            "route": routing.query_type,
+            "retrieval_used": False,
+            "context_sufficient": False,
+            "query_type": routing.query_type,
+            "should_retrieve": False,
+            "should_generate": False,
+            "context_quality": "n/a",
+            "confidence": routing.confidence,
+            "engine": routing.engine,
+            "is_fallback": routing.is_fallback
         }
+        res = {
+            "answer": "I can help you with questions about the selected PDF.",
+            "sources": []
+        }
+        if debug_mode:
+            res["decision"] = decision_data
+        return res
 
     if routing.query_type == "clarification_needed":
-        return {
-            "answer": "Could you please clarify your question? I need a clear topic to search the document.",
-            "sources": [],
-            "decision": {
-                "query_type": routing.query_type,
-                "should_retrieve": False,
-                "should_generate": False,
-                "context_quality": "n/a",
-                "confidence": routing.confidence,
-                "engine": routing.engine,
-                "is_fallback": routing.is_fallback
-            }
+        decision_data = {
+            "route": routing.query_type,
+            "retrieval_used": False,
+            "context_sufficient": False,
+            "query_type": routing.query_type,
+            "should_retrieve": False,
+            "should_generate": False,
+            "context_quality": "n/a",
+            "confidence": routing.confidence,
+            "engine": routing.engine,
+            "is_fallback": routing.is_fallback
         }
+        res = {
+            "answer": "Could you clarify what you'd like to know about the selected document?",
+            "sources": []
+        }
+        if debug_mode:
+            res["decision"] = decision_data
+        return res
 
     # -------------------------------------------------------------
     # 2. ChromaDB Retrieval (Executed only when should_retrieve is True)
@@ -246,45 +279,21 @@ def chat(request: ChatRequest):
     # -------------------------------------------------------------
     # 3. Jev Decision 3 & 4: Retrieval Quality and Generation Gating
     # -------------------------------------------------------------
-    context_decision = evaluate_context_sufficiency(question, retrieved_chunks, filename=request.filename)
+    context_decision = evaluate_context_sufficiency(question, retrieved_chunks, filename=target_doc)
 
     # Top result metadata for inspection
     top_page = retrieved_chunks[0]["page"] if retrieved_chunks else None
     top_dist = round(retrieved_chunks[0]["distance"], 4) if retrieved_chunks and retrieved_chunks[0].get("distance") is not None else None
 
     if not context_decision.should_generate:
-        print("[LLM] Generation blocked: Context is insufficient or uncertain to answer reliably.")
-        return {
-            "answer": "I couldn't find enough information about that in the selected PDF.",
-            "sources": [],
-            "decision": {
-                "query_type": routing.query_type,
-                "should_retrieve": True,
-                "should_generate": False,
-                "context_quality": context_decision.context_quality,
-                "confidence": context_decision.confidence,
-                "noul_sufficiency": context_decision.noul_sufficiency,
-                "engine": context_decision.engine,
-                "is_fallback": context_decision.is_fallback,
-                "retrieved_count": len(retrieved_chunks),
-                "top_page": top_page,
-                "top_distance": top_dist
-            }
-        }
-
-    # -------------------------------------------------------------
-    # 4. Gemini Answer Generation (Executed only when context is sufficient)
-    # -------------------------------------------------------------
-    print(f"\n[LLM] Generating grounded answer with {GEMINI_MODEL}...")
-    answer, sources = generate_grounded_answer(question, retrieved_chunks)
-
-    return {
-        "answer": answer,
-        "sources": sources,
-        "decision": {
+        print("[GEMINI] Generation skipped: Context is insufficient or unverified.")
+        decision_data = {
+            "route": routing.query_type,
+            "retrieval_used": True,
+            "context_sufficient": False,
             "query_type": routing.query_type,
             "should_retrieve": True,
-            "should_generate": True,
+            "should_generate": False,
             "context_quality": context_decision.context_quality,
             "confidence": context_decision.confidence,
             "noul_sufficiency": context_decision.noul_sufficiency,
@@ -294,4 +303,40 @@ def chat(request: ChatRequest):
             "top_page": top_page,
             "top_distance": top_dist
         }
+        res = {
+            "answer": "I couldn't find enough information about that in the selected PDF.",
+            "sources": []
+        }
+        if debug_mode:
+            res["decision"] = decision_data
+        return res
+
+    # -------------------------------------------------------------
+    # 4. Gemini Answer Generation (Executed only when context is sufficient)
+    # -------------------------------------------------------------
+    print(f"\n[GEMINI] Generating answer with {GEMINI_MODEL}...")
+    answer, sources = generate_grounded_answer(question, retrieved_chunks)
+
+    decision_data = {
+        "route": routing.query_type,
+        "retrieval_used": True,
+        "context_sufficient": True,
+        "query_type": routing.query_type,
+        "should_retrieve": True,
+        "should_generate": True,
+        "context_quality": context_decision.context_quality,
+        "confidence": context_decision.confidence,
+        "noul_sufficiency": context_decision.noul_sufficiency,
+        "engine": context_decision.engine,
+        "is_fallback": context_decision.is_fallback,
+        "retrieved_count": len(retrieved_chunks),
+        "top_page": top_page,
+        "top_distance": top_dist
     }
+    res = {
+        "answer": answer,
+        "sources": sources
+    }
+    if debug_mode:
+        res["decision"] = decision_data
+    return res

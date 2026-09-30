@@ -374,7 +374,7 @@ def main():
 
         if routing and routing.query_type == "unsupported":
             print("\nAssistant:")
-            print("I can only answer questions based on the loaded PDF document.")
+            print("I can help you with questions about the selected PDF.")
             continue
 
         # Stage 1: Retrieval (Question -> Embedding -> ChromaDB -> Retrieved chunks)
@@ -395,7 +395,7 @@ def main():
                 continue
 
         # Stage 2: Generation (Question + Retrieved chunks -> Gemini -> Answer)
-        print(f"[LLM] Context verified. Generating answer with {gemini_model}...")
+        print(f"\n[GEMINI] Generating answer with {gemini_model}...")
         answer, sources = generate_answer(query, retrieved_chunks, gemini_client, model_name=gemini_model)
 
         print("\nAssistant:")

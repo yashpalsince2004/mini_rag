@@ -22,7 +22,7 @@
         <span class="badge-pill">EDUCATIONAL</span>
       </div>
       <div class="nav-right">
-        <span class="pill-tag featured">TypeSafe Jev</span>
+        <span class="pill-tag featured">Jev via OpenRouter</span>
         <span class="pill-tag">all-MiniLM-L6-v2</span>
         <span class="pill-tag">ChromaDB</span>
         <span class="pill-tag featured">Gemini 2.5 Flash</span>
@@ -412,7 +412,7 @@
 
       const content = document.createElement("div");
       content.className = "message-content thinking-text";
-      content.innerHTML = '<span class="pulse-indicator"></span> <span id="thinking-stage-text">Evaluating query intent with TypeSafe Jev...</span>';
+      content.innerHTML = '<span class="pulse-indicator"></span> <span id="thinking-stage-text">Evaluating query intent with Jev (OpenRouter)...</span>';
       bubble.appendChild(content);
 
       row.appendChild(bubble);
@@ -420,7 +420,7 @@
       chatMessages.scrollTop = chatMessages.scrollHeight;
 
       const stages = [
-        "Evaluating query intent with TypeSafe Jev...",
+        "Evaluating query intent with Jev (OpenRouter)...",
         "Searching ChromaDB & ranking chunks...",
         "Verifying context sufficiency with Jev...",
         "Synthesizing answer with Gemini..."
