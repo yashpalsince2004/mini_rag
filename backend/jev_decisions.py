@@ -128,10 +128,10 @@ class JevClient:
                 "type": "choice",
                 "instructions": "Classify the user query intent for a document question-answering assistant.",
                 "criteria": {
-                    "document_question": "Questions asking about information, facts, concepts, or details that can be answered from the document or PDF.",
+                    "document_question": "Questions asking about information, concepts, definitions, topics, or details that may be found in the selected document or presentation (including topics like AI, tools, formatting, rules, guides, tests).",
                     "greeting": "Casual greetings, hellos, good mornings, or introductory pleasantries.",
                     "help": "Asking how to use this tool, what it does, or asking for instructions on using the assistant.",
-                    "unsupported": "Out-of-scope requests such as writing code, generating creative stories, checking real-time weather, or general knowledge unrelated to documents.",
+                    "unsupported": "Requests completely unrelated to reading or learning from documents, such as asking to write code, compose poems/jokes, or real-time web lookups (weather/stocks).",
                     "clarification_needed": "Empty, garbled, or completely ambiguous input that cannot be interpreted without clarification."
                 }
             },
@@ -139,8 +139,8 @@ class JevClient:
                 "type": "noul",
                 "instructions": "Should the assistant perform semantic retrieval from the selected document to answer this query?",
                 "criteria": {
-                    "true": "The user is asking a factual question about the document content, topics, or subject matter (e.g. book details, tests, rules, sections, scores).",
-                    "false": "The query is a greeting, polite phrase, help request, coding instruction, or unrelated request that does not need document retrieval."
+                    "true": "The user is asking about content, topics, concepts, definitions, or questions that can be checked against the document.",
+                    "false": "The query is a greeting, polite phrase, help request, or request that does not need document retrieval."
                 }
             }
         }

@@ -70,12 +70,23 @@ def get_collection_name(filename: str) -> str:
     return name
 
 
-def validate_pdf_path(filename: str) -> Path:
+SUPPORTED_EXTENSIONS = {".pdf", ".pptx", ".docx", ".txt"}
+
+
+def validate_doc_path(filename: str) -> Path:
     """
     Validates that the filename exists inside documents/ and prevents path traversal attacks.
+    Supports .pdf, .pptx, .docx, and .txt files.
     """
-    if not filename or not filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Invalid file: Only .pdf files are supported.")
+    if not filename:
+        raise HTTPException(status_code=400, detail="Filename cannot be empty.")
+
+    ext = Path(filename).suffix.lower()
+    if ext not in SUPPORTED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file format. Supported extensions: {', '.join(sorted(SUPPORTED_EXTENSIONS))}"
+        )
 
     file_path = (DOCUMENTS_DIR / filename).resolve()
     
@@ -89,6 +100,9 @@ def validate_pdf_path(filename: str) -> Path:
         raise HTTPException(status_code=404, detail=f"File '{filename}' not found in documents directory.")
 
     return file_path
+
+
+validate_pdf_path = validate_doc_path
 
 
 # =====================================================================

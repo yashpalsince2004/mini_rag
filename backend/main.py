@@ -1,9 +1,13 @@
 import os
 from pathlib import Path
 from typing import Optional
+# pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
+# pyrefly: ignore [missing-import]
 from fastapi import FastAPI, HTTPException
+# pyrefly: ignore [missing-import]
 from fastapi.middleware.cors import CORSMiddleware
+# pyrefly: ignore [missing-import]
 from pydantic import BaseModel
 
 # Load environment variables
@@ -93,18 +97,31 @@ def health_check():
     }
 
 
+SUPPORTED_EXTENSIONS = {".pdf", ".pptx", ".docx", ".txt"}
+
+
 @app.get("/api/documents")
 def list_documents():
     """
-    Returns available PDF files from the local documents/ directory.
-    Only allows .pdf files.
+    Returns available document files from the local documents/ directory.
+    Supports .pdf, .pptx, .docx, and .txt files.
     """
     if not DOCUMENTS_DIR.exists():
         return {"documents": []}
 
-    pdf_files = sorted([f.name for f in DOCUMENTS_DIR.iterdir() if f.is_file() and f.name.lower().endswith(".pdf")])
+    doc_files = sorted([
+        f.name for f in DOCUMENTS_DIR.iterdir()
+        if f.is_file() and f.suffix.lower() in SUPPORTED_EXTENSIONS
+    ])
     return {
-        "documents": [{"name": name} for name in pdf_files]
+        "documents": [
+            {
+                "name": name,
+                "extension": Path(name).suffix.lower(),
+                "type": "Presentation (PPTX)" if Path(name).suffix.lower() == ".pptx" else ("PDF Document" if Path(name).suffix.lower() == ".pdf" else "Document")
+            }
+            for name in doc_files
+        ]
     }
 
 

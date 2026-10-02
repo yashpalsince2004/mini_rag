@@ -40,11 +40,11 @@
       </p>
     </section>
 
-    <!-- Document Selection Card (Clay surface-dark-elevated) -->
+    <!-- Document Selection Card -->
     <section class="content-card document-card">
       <div class="card-top-row">
         <span class="caption-uppercase">SELECT DOCUMENT</span>
-        <span class="card-caption">Local PDF directory</span>
+        <span class="card-caption">Local documents (.pdf, .pptx, .docx, .txt)</span>
       </div>
 
       <div class="selector-row">
@@ -53,6 +53,10 @@
             <option value="">Scanning documents/ directory...</option>
           </select>
         </div>
+        <button id="refresh-docs-btn" class="button-secondary" type="button" title="Rescan documents directory">
+          <span>⟳</span>
+          <span>Refresh</span>
+        </button>
         <button id="load-btn" class="button-primary" disabled>
           <span class="btn-text">Load Document</span>
         </button>
@@ -159,6 +163,7 @@
     const sendBtn = document.getElementById("send-btn") as HTMLButtonElement;
     const clearBtn = document.getElementById("clear-btn") as HTMLButtonElement;
     const inspectorToggleBtn = document.getElementById("inspector-toggle-btn") as HTMLButtonElement;
+    const refreshDocsBtn = document.getElementById("refresh-docs-btn") as HTMLButtonElement;
     const activeDocTag = document.getElementById("active-doc-tag") as HTMLElement;
 
     function showError(msg: string) {
@@ -183,16 +188,17 @@
     });
 
     // 1. Fetch available documents from FastAPI
-    async function fetchDocuments() {
+    async function fetchDocuments(silent = false) {
       try {
-        clearError();
+        if (!silent) clearError();
+        const currentVal = docSelect.value;
         const res = await fetch(`${API_BASE}/api/documents`);
         if (!res.ok) throw new Error(`Backend error (${res.status}): Failed to load documents.`);
         const data = await res.json();
 
         docSelect.innerHTML = "";
         if (!data.documents || data.documents.length === 0) {
-          docSelect.innerHTML = '<option value="">No PDF files found in documents/</option>';
+          docSelect.innerHTML = '<option value="">No supported documents found in documents/</option>';
           docSelect.disabled = true;
           loadBtn.disabled = true;
           return;
@@ -200,22 +206,43 @@
 
         const defaultOption = document.createElement("option");
         defaultOption.value = "";
-        defaultOption.textContent = "Select a PDF...";
+        defaultOption.textContent = "Select a document...";
         docSelect.appendChild(defaultOption);
 
-        data.documents.forEach((doc: { name: string }) => {
+        data.documents.forEach((doc: { name: string; extension?: string; type?: string }) => {
           const opt = document.createElement("option");
           opt.value = doc.name;
-          opt.textContent = doc.name;
+          const icon = doc.extension === ".pptx" ? "📊" : (doc.extension === ".docx" ? "📝" : "📄");
+          opt.textContent = `${icon} ${doc.name}`;
+          if (doc.name === currentVal) {
+            opt.selected = true;
+          }
           docSelect.appendChild(opt);
         });
 
         docSelect.disabled = false;
+        loadBtn.disabled = !docSelect.value || isProcessing;
       } catch (err: any) {
-        docSelect.innerHTML = '<option value="">Cannot connect to backend</option>';
-        showError(`Backend connection failed: Make sure FastAPI is running on ${API_BASE}. (${err.message})`);
+        if (!silent) {
+          docSelect.innerHTML = '<option value="">Cannot connect to backend</option>';
+          showError(`Backend connection failed: Make sure FastAPI is running on ${API_BASE}. (${err.message})`);
+        }
       }
     }
+
+    refreshDocsBtn?.addEventListener("click", async () => {
+      refreshDocsBtn.disabled = true;
+      refreshDocsBtn.innerHTML = "<span>⟳</span> <span>Scanning...</span>";
+      await fetchDocuments();
+      refreshDocsBtn.disabled = false;
+      refreshDocsBtn.innerHTML = "<span>⟳</span> <span>Refresh</span>";
+    });
+
+    docSelect.addEventListener("focus", () => {
+      if (!isProcessing) {
+        fetchDocuments(true);
+      }
+    });
 
     docSelect.addEventListener("change", () => {
       loadBtn.disabled = !docSelect.value || isProcessing;
