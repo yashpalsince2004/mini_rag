@@ -32,8 +32,34 @@ TOP_K = 3              # Top K chunks to retrieve for RAG query
 # Ensure documents directory exists
 DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
 
+def init_chroma_client():
+    """
+    Initializes ChromaDB client.
+    Connects to hosted Chroma Cloud if CHROMA_API_KEY is configured.
+    Otherwise falls back to local persistent storage (chroma_db/).
+    """
+    api_key = os.getenv("CHROMA_API_KEY")
+    if api_key and not api_key.strip().startswith("your_"):
+        tenant = os.getenv("CHROMA_TENANT", "default_tenant")
+        database = os.getenv("CHROMA_DATABASE", "mini_rag")
+        print(f"[ChromaDB] Connecting to hosted Chroma Cloud (tenant: {tenant}, database: {database})...")
+        try:
+            client = chromadb.CloudClient(
+                api_key=api_key.strip(),
+                tenant=tenant.strip(),
+                database=database.strip()
+            )
+            print("[ChromaDB] Successfully connected to Chroma Cloud!")
+            return client
+        except Exception as e:
+            print(f"[ChromaDB] Warning: Failed to connect to Chroma Cloud ({e}). Falling back to local storage.")
+
+    print(f"[ChromaDB] Using local persistent database at {CHROMA_PATH}...")
+    return chromadb.PersistentClient(path=CHROMA_PATH)
+
+
 # ChromaDB client and global embedding model cache
-chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
+chroma_client = init_chroma_client()
 _embedding_model: Optional[SentenceTransformer] = None
 
 

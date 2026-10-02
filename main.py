@@ -121,7 +121,23 @@ def create_vector_database(
     Automatically detects if chunking configuration changed and rebuilds
     the collection to prevent reusing stale or incompatible chunks.
     """
-    client = chromadb.PersistentClient(path=db_path)
+    api_key = os.getenv("CHROMA_API_KEY")
+    if api_key and not api_key.strip().startswith("your_"):
+        tenant = os.getenv("CHROMA_TENANT", "default_tenant")
+        database = os.getenv("CHROMA_DATABASE", "mini_rag")
+        print(f"Connecting to hosted Chroma Cloud (tenant: {tenant}, database: {database})...")
+        try:
+            client = chromadb.CloudClient(
+                api_key=api_key.strip(),
+                tenant=tenant.strip(),
+                database=database.strip()
+            )
+            print("Successfully connected to Chroma Cloud!")
+        except Exception as e:
+            print(f"Warning: Failed to connect to Chroma Cloud ({e}). Using local storage.")
+            client = chromadb.PersistentClient(path=db_path)
+    else:
+        client = chromadb.PersistentClient(path=db_path)
     
     # Check if collection already exists
     existing_collections = [c.name for c in client.list_collections()]
