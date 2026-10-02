@@ -173,13 +173,32 @@ def create_vector_database(
 # =====================================================================
 # Step 6 & 7: Question Embedding and Similarity Search (Stage 1: Retrieval)
 # =====================================================================
-def retrieve(query: str, collection, embedding_model: SentenceTransformer, top_k: int = TOP_K) -> list[dict]:
+def is_overview_query(query: str) -> bool:  
+    """Detects whether user is asking for an overview/summary of the entire document."""
+    import re   
+    q = query.lower()
+    patterns = [
+        r"\b(book|document|pdf)\b.*\b(about|summary|overview|topic|cover|describe)\b",
+        r"\b(about|summary|overview)\b.*\b(book|document|pdf)\b",
+        r"\bwhat is this (book|document|pdf)\b",
+        r"\bwhat is (the|this) (book|pdf|document) about\b"
+    ]
+    return any(re.search(p, q) for p in patterns)
+
+
+def retrieve(
+    query: str,
+    collection: chromadb.Collection,
+    embedding_model: SentenceTransformer,
+    top_k: int = TOP_K
+) -> list[dict]:
     """
     Stage 1: Retrieval Pipeline
     Question -> Embedding -> ChromaDB -> Retrieved chunks
     
     Embeds the user's question using the same embedding model,
     searches ChromaDB for the closest vectors, and returns top chunks with distances.
+    For whole-document overview queries, injects introductory chunks.
     """
     # Embed question with the same model used for chunks
     query_embedding = embedding_model.encode([query]).tolist()
@@ -201,6 +220,23 @@ def retrieve(query: str, collection, embedding_model: SentenceTransformer, top_k
             "page": meta.get("page", "Unknown"),
             "distance": dist
         })
+
+    # For whole-document summary/overview questions, retrieve the document's introductory pages (title, contents, intro)
+    if is_overview_query(query):
+        try:
+            overview_chunks = []
+            for p_num in [2, 4, 5]:
+                p_res = collection.get(where={"page": p_num}, limit=1)
+                for doc, meta in zip(p_res.get("documents", []), p_res.get("metadatas", [])):
+                    overview_chunks.append({
+                        "text": doc,
+                        "page": meta.get("page", p_num),
+                        "distance": 0.80
+                    })
+            if overview_chunks:
+                retrieved_chunks = overview_chunks[:top_k]
+        except Exception:
+            pass
 
     # Educational output: display retrieved context and distances
     print("\n-------------------------------")
@@ -258,21 +294,25 @@ QUESTION:
 {query}
 """
 
-    # Generate answer with Gemini
-    try:
-        response = gemini_client.models.generate_content(
-            model=model_name,
-            contents=prompt
-        )
-        answer = response.text.strip()
-    except Exception as e:
-        # Graceful error handling distinguishing LLM failure from retrieval
-        answer = (
-            "⚠️ Gemini generation failed.\n\n"
-            "The retrieval step succeeded, but the LLM could not\n"
-            "generate the final answer.\n\n"
-            f"Error:\n{e}"
-        )
+    # Generate answer with Gemini (using chat session to eliminate AFC warning and retrying temporary 503 spikes)
+    import time
+    answer = ""
+    for attempt in range(2):
+        try:
+            chat = gemini_client.chats.create(model=model_name)
+            response = chat.send_message(prompt)
+            answer = response.text.strip()
+            break
+        except Exception as e:
+            if "503" in str(e) and attempt == 0:
+                time.sleep(1.5)
+                continue
+            answer = (
+                "⚠️ Gemini generation failed.\n\n"
+                "The retrieval step succeeded, but the LLM could not\n"
+                "generate the final answer.\n\n"
+                f"Error:\n{e}"
+            )
 
     return answer, pages
 

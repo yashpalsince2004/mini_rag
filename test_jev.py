@@ -10,7 +10,9 @@ Verifies:
 import os
 import sys
 from pathlib import Path
+# pyrefly: ignore [missing-import]
 import httpx
+# pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
 
 # Load .env

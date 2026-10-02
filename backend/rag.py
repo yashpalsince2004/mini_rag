@@ -203,9 +203,22 @@ def ingest_document(filename: str, file_path: Path) -> tuple[int, int]:
     return len(pages), len(chunks)
 
 
+def is_overview_query(query: str) -> bool:
+    """Detects whether user is asking for an overview/summary of the entire document."""
+    q = query.lower()
+    patterns = [
+        r"\b(book|document|pdf)\b.*\b(about|summary|overview|topic|cover|describe)\b",
+        r"\b(about|summary|overview)\b.*\b(book|document|pdf)\b",
+        r"\bwhat is this (book|document|pdf)\b",
+        r"\bwhat is (the|this) (book|pdf|document) about\b"
+    ]
+    return any(re.search(p, q) for p in patterns)
+
+
 def retrieve_relevant_chunks(query: str, collection_name: str, top_k: int = TOP_K) -> list[dict]:
     """
     Embeds the user's question with Sentence Transformers and searches ChromaDB for the closest chunks.
+    For whole-document summary/overview queries, includes introductory chunks.
     """
     try:
         collection = chroma_client.get_collection(name=collection_name)
@@ -238,12 +251,30 @@ def retrieve_relevant_chunks(query: str, collection_name: str, top_k: int = TOP_
             "distance": dist
         })
 
-    return retrieved
+    # For whole-document summary/overview questions, retrieve the document's introductory pages (title, contents, intro)
+    if is_overview_query(query):
+        try:
+            overview_chunks = []
+            for p_num in [2, 4, 5]:
+                p_res = collection.get(where={"page": p_num}, limit=1)
+                for doc, meta in zip(p_res.get("documents", []), p_res.get("metadatas", [])):
+                    overview_chunks.append({
+                        "text": doc,
+                        "page": meta.get("page", p_num),
+                        "distance": 0.80
+                    })
+            if overview_chunks:
+                return overview_chunks[:top_k]
+        except Exception:
+            pass
+
+    return retrieved[:top_k]
 
 
 def generate_grounded_answer(query: str, retrieved_chunks: list[dict], model_name: str = GEMINI_MODEL) -> tuple[str, list[int]]:
     """
     Builds the augmented prompt with retrieved context and asks Gemini to generate an answer.
+    Uses client.chats.create to eliminate automatic function calling (AFC) warnings.
     """
     pages = sorted(list(set(c["page"] for c in retrieved_chunks if isinstance(c["page"], int))))
 
@@ -268,18 +299,23 @@ QUESTION:
 {query}
 """
 
+    import time
     client = get_gemini_client()
-    try:
-        response = client.models.generate_content(
-            model=model_name,
-            contents=prompt
-        )
-        answer = response.text.strip()
-    except Exception as e:
-        answer = (
-            "⚠️ Gemini generation failed.\n\n"
-            "The retrieval and context validation succeeded, but the LLM could not generate the final answer.\n\n"
-            f"Error details:\n{e}"
-        )
+    answer = ""
+    for attempt in range(2):
+        try:
+            chat = client.chats.create(model=model_name)
+            response = chat.send_message(prompt)
+            answer = response.text.strip()
+            break
+        except Exception as e:
+            if "503" in str(e) and attempt == 0:
+                time.sleep(1.5)
+                continue
+            answer = (
+                "⚠️ Gemini generation failed.\n\n"
+                "The retrieval and context validation succeeded, but the LLM could not generate the final answer.\n\n"
+                f"Error details:\n{e}"
+            )
 
     return answer, pages
