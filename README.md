@@ -265,9 +265,15 @@ JEV_MODEL=~typesafe/jev-latest
 
 # Optional Development Debugging
 DEBUG_DECISIONS=true
+
+# Optional Chroma Cloud Configuration (Hosted Vector DB)
+# Leave blank to use local ./chroma_db/
+CHROMA_API_KEY=your_chroma_api_key_here
+CHROMA_TENANT=your_tenant_id_here
+CHROMA_DATABASE=mini_rag
 ```
 
-> **Security Guarantee:** `OPENROUTER_API_KEY` and `GEMINI_API_KEY` are loaded strictly backend-side. They are never sent to the browser or exposed to Astro frontend templates.
+> **Security Guarantee:** `OPENROUTER_API_KEY`, `CHROMA_API_KEY`, and `GEMINI_API_KEY` are loaded strictly backend-side. They are never sent to the browser or exposed to Astro frontend templates.
 
 ---
 

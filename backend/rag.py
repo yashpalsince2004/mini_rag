@@ -2,16 +2,23 @@ import os
 import re
 from pathlib import Path
 from typing import Optional
+# pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
+# pyrefly: ignore [missing-import]
 from fastapi import HTTPException
 
 try:
+    # pyrefly: ignore [missing-import]
     import pymupdf as fitz  # PyMuPDF
 except ImportError:
+    # pyrefly: ignore [missing-import]
     import fitz
 
+# pyrefly: ignore [missing-import]
 from sentence_transformers import SentenceTransformer
+# pyrefly: ignore [missing-import]
 import chromadb
+# pyrefly: ignore [missing-import]
 from google import genai
 
 # Load environment variables
