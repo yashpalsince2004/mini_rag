@@ -27,7 +27,7 @@ EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 CHUNK_SIZE = 300       # Chunk size in words
 CHUNK_OVERLAP = 50     # Overlap between consecutive chunks in words
-TOP_K = 3              # Top K chunks to retrieve for RAG query
+TOP_K = 5              # Top K chunks to retrieve for RAG query
 
 # Ensure documents directory exists
 DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
