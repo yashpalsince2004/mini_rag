@@ -311,7 +311,9 @@
 
         const sender = document.createElement("div");
         sender.className = "message-sender";
-        sender.textContent = msg.role === "user" ? "YOU" : "ASSISTANT";
+        sender.innerHTML = msg.role === "user"
+          ? '<span>You</span> <span class="sender-icon">👤</span>'
+          : '<span class="sender-icon">✦</span> <span>Assistant</span>';
         bubble.appendChild(sender);
 
         const content = document.createElement("div");
@@ -407,7 +409,7 @@
 
       const sender = document.createElement("div");
       sender.className = "message-sender";
-      sender.textContent = "ASSISTANT";
+      sender.innerHTML = '<span class="sender-icon">✦</span> <span>Assistant</span>';
       bubble.appendChild(sender);
 
       const content = document.createElement("div");
@@ -511,49 +513,55 @@
     fetchDocuments();
   </script>
 
-  <style>
+  <style is:global>
     /* =====================================================================
-       Clay Dark Design System Tokens (per DESIGN.md dark theme instructions)
+       True Dark Black Design System & Chat Box Layout
        ===================================================================== */
     :root {
-      /* Dark Theme Surfaces from DESIGN.md */
-      --colors-surface-dark: #0a1a1a;          /* Dark teal-tinted near-black floor */
-      --colors-surface-dark-elevated: #142424; /* Elevated dark card surface */
-      --colors-surface-dark-card: #182a2a;     /* Slightly elevated card surface */
-      --colors-surface-dark-input: #0e1e1e;    /* Input field surface */
+      /* Pure Dark Black Palette */
+      --colors-surface-dark: #08090c;          /* Deep pitch obsidian canvas */
+      --colors-surface-dark-elevated: #101117; /* Elevated card surface */
+      --colors-surface-dark-card: #151620;     /* Secondary card surface */
+      --colors-surface-dark-input: #141620;    /* Input field surface */
       
       /* Dark Hairline Borders */
-      --colors-hairline: #223636;
-      --colors-hairline-subtle: #1b2c2c;
-      --colors-hairline-focus: #385555;
+      --colors-hairline: #1e202d;
+      --colors-hairline-subtle: #161822;
+      --colors-hairline-focus: #3b82f6;
       
-      /* Typography Colors on Dark */
+      /* Typography Colors */
       --colors-on-dark: #ffffff;
-      --colors-on-dark-body: #e0e8e8;
-      --colors-on-dark-soft: #a0a0a0;
-      --colors-on-dark-muted: #748888;
+      --colors-on-dark-body: #d1d5db;
+      --colors-on-dark-soft: #9ca3af;
+      --colors-on-dark-muted: #64748b;
       
-      /* Brand Accents from DESIGN.md */
-      --colors-brand-teal: #1a3a3a;            /* Deep teal */
-      --colors-brand-pink: #ff4d8b;            /* Hot pink accent */
-      --colors-brand-lavender: #b8a4ed;        /* Soft lavender */
-      --colors-brand-peach: #ffb084;          /* Warm peach */
-      --colors-brand-ochre: #e8b94a;          /* Mustard / ochre */
-      --colors-brand-mint: #a4d4c5;           /* Mint highlight */
+      /* Brand Accents */
+      --colors-brand-primary: #3b82f6;        /* Electric Blue */
+      --colors-brand-cyan: #38bdf8;           /* Cyan Highlight */
+      --colors-brand-indigo: #818cf8;         /* Indigo / Lavender */
+      --colors-brand-violet: #a78bfa;         /* Violet */
       
-      --colors-success: #22c55e;
+      /* Chat Box Bubbles */
+      --colors-user-bubble: #1e2235;          /* User right bubble */
+      --colors-user-bubble-border: #2d3652;   /* User bubble border */
+      --colors-assistant-bubble: #13141d;     /* Assistant left bubble */
+      --colors-assistant-bubble-border: #222533; /* Assistant bubble border */
+      
+      /* State Accents */
+      --colors-success: #10b981;
       --colors-error: #ef4444;
+      --colors-warning: #f59e0b;
 
       /* Typography */
       --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       --font-mono: 'JetBrains Mono', monospace;
 
-      /* Border Radii (DESIGN.md scale) */
+      /* Border Radii */
       --rounded-xs: 6px;
       --rounded-sm: 8px;
       --rounded-md: 12px;
       --rounded-lg: 16px;
-      --rounded-xl: 24px;
+      --rounded-xl: 20px;
       --rounded-pill: 9999px;
     }
 
@@ -574,10 +582,12 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    /* Top Navigation (Clay Dark top-nav) */
+    /* Top Navigation */
     .top-nav {
       height: 64px;
-      background: var(--colors-surface-dark);
+      background: rgba(8, 9, 12, 0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--colors-hairline);
       position: sticky;
       top: 0;
@@ -604,7 +614,7 @@
 
     .logo-symbol {
       font-size: 1.15rem;
-      color: var(--colors-brand-mint);
+      color: var(--colors-brand-cyan);
     }
 
     .logo-text {
@@ -632,10 +642,10 @@
     }
 
     .pill-tag.featured {
-      color: var(--colors-brand-mint);
-      border-color: #2b4c4c;
+      color: var(--colors-brand-cyan);
+      border-color: #1e2b45;
       font-weight: 600;
-      background: #112828;
+      background: #0f1728;
     }
 
     /* Layout Container */
@@ -663,9 +673,9 @@
       font-weight: 600;
       letter-spacing: 1.2px;
       text-transform: uppercase;
-      color: var(--colors-brand-mint);
-      background: #122828;
-      border: 1px solid #264545;
+      color: var(--colors-brand-cyan);
+      background: #0f172a;
+      border: 1px solid #1e293b;
       padding: 0.3rem 0.85rem;
       border-radius: var(--rounded-pill);
     }
@@ -676,8 +686,8 @@
 
     .hero-headline {
       font-size: 2.75rem;
-      font-weight: 500;
-      line-height: 1.1;
+      font-weight: 600;
+      line-height: 1.15;
       letter-spacing: -1.75px;
       color: var(--colors-on-dark);
       margin-bottom: 0.75rem;
@@ -686,17 +696,17 @@
     .hero-subline {
       font-size: 1.05rem;
       color: var(--colors-on-dark-soft);
-      max-width: 620px;
-      line-height: 1.5;
+      max-width: 640px;
+      line-height: 1.55;
     }
 
-    /* Content Cards (Clay rounded-xl with dark hairlines) */
+    /* Content Cards */
     .content-card {
       background: var(--colors-surface-dark-elevated);
       border: 1px solid var(--colors-hairline);
       border-radius: var(--rounded-xl);
       padding: 1.75rem 2rem;
-      box-shadow: none;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
     }
 
     .card-top-row {
@@ -729,11 +739,11 @@
     .doc-badge {
       font-family: var(--font-mono);
       font-size: 0.72rem;
-      background: var(--colors-surface-dark);
-      color: var(--colors-brand-mint);
+      background: #141724;
+      color: var(--colors-brand-cyan);
       padding: 0.2rem 0.55rem;
       border-radius: var(--rounded-sm);
-      border: 1px solid var(--colors-hairline);
+      border: 1px solid #23273d;
     }
 
     /* Document Selector Row */
@@ -761,15 +771,16 @@
       outline: none;
       cursor: pointer;
       appearance: none;
-      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a0a0a0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
       background-repeat: no-repeat;
       background-position: right 1rem center;
       background-size: 1em;
-      transition: border-color 0.15s ease;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
 
     select:focus {
-      border-color: var(--colors-brand-mint);
+      border-color: var(--colors-brand-primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
     }
 
     select:disabled {
@@ -777,7 +788,7 @@
       cursor: not-allowed;
     }
 
-    /* Buttons (Clay Dark button-primary & button-secondary) */
+    /* Buttons */
     .button-primary {
       height: 44px;
       padding: 0 1.5rem;
@@ -793,18 +804,22 @@
       align-items: center;
       justify-content: center;
       gap: 0.5rem;
-      transition: background-color 0.15s ease, opacity 0.15s ease;
+      transition: background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
       white-space: nowrap;
     }
 
     .button-primary:hover:not(:disabled) {
-      background: #e5f0f0;
+      background: #f1f5f9;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(255, 255, 255, 0.15);
     }
 
     .button-primary:disabled {
-      background: #1f3030;
+      background: #191b26;
       color: var(--colors-on-dark-muted);
       cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
     }
 
     .button-secondary {
@@ -821,12 +836,13 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      transition: background-color 0.15s ease;
+      transition: all 0.15s ease;
     }
 
     .button-secondary:hover:not(:disabled) {
-      background: var(--colors-surface-dark);
-      border-color: var(--colors-hairline-focus);
+      background: #1b1e2c;
+      border-color: #2e3448;
+      color: #ffffff;
     }
 
     .button-secondary:disabled {
@@ -840,7 +856,7 @@
       font-size: 0.78rem;
     }
 
-    /* Status Banners (Dark Clay Accents) */
+    /* Status Banners */
     .status-banner {
       display: flex;
       align-items: center;
@@ -853,20 +869,20 @@
     }
 
     .status-banner.info-status {
-      background: #112626;
-      border-color: #1e3f3f;
-      color: #9fe2d4;
+      background: #0f1629;
+      border-color: #1e2c52;
+      color: #93c5fd;
     }
 
     .status-banner.success-status {
-      background: #0d2820;
-      border-color: #154536;
-      color: #4ade80;
+      background: #091a13;
+      border-color: #133a28;
+      color: #34d399;
     }
 
     .status-banner.error-status {
-      background: #2b1114;
-      border-color: #4a1d22;
+      background: #240c11;
+      border-color: #481720;
       color: #f87171;
     }
 
@@ -896,9 +912,11 @@
       display: none !important;
     }
 
-    /* Chat Section */
+    /* =====================================================================
+       Chat Box Interface (User Right, Assistant Left)
+       ===================================================================== */
     .chat-card {
-      min-height: 520px;
+      min-height: 540px;
       display: flex;
       flex-direction: column;
     }
@@ -906,11 +924,29 @@
     .chat-messages {
       flex: 1;
       overflow-y: auto;
-      max-height: 480px;
-      padding: 0.5rem 0;
+      max-height: 500px;
+      padding: 1rem 0.5rem;
       display: flex;
       flex-direction: column;
-      gap: 1.25rem;
+      gap: 1.35rem;
+      scroll-behavior: smooth;
+    }
+
+    .chat-messages::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .chat-messages::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .chat-messages::-webkit-scrollbar-thumb {
+      background: #1f2231;
+      border-radius: 9999px;
+    }
+
+    .chat-messages::-webkit-scrollbar-thumb:hover {
+      background: #2d334a;
     }
 
     .empty-state {
@@ -931,7 +967,7 @@
       align-items: center;
       justify-content: center;
       font-size: 1.5rem;
-      color: var(--colors-brand-mint);
+      color: var(--colors-brand-cyan);
     }
 
     .empty-state h3 {
@@ -949,52 +985,87 @@
       line-height: 1.5;
     }
 
-    /* Messages Formatting */
+    /* Message Rows Container */
     .message-row {
       display: flex;
       width: 100%;
     }
 
+    /* USER MESSAGE: ALIGNED TO RIGHT */
     .message-row.user {
       justify-content: flex-end;
     }
 
+    /* ASSISTANT MESSAGE: ALIGNED TO LEFT */
     .message-row.assistant {
       justify-content: flex-start;
     }
 
+    /* Message Bubbles Base */
     .message-bubble {
-      max-width: 85%;
-      padding: 1.15rem 1.4rem;
-      border-radius: var(--rounded-lg);
+      padding: 1.15rem 1.35rem;
       font-size: 0.94rem;
       line-height: 1.6;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+      position: relative;
     }
 
-    /* User Bubble (Clay brand-teal) */
+    /* User Bubble (Right) */
     .message-row.user .message-bubble {
-      background: var(--colors-brand-teal);
-      border: 1px solid #295555;
+      max-width: 75%;
+      background: var(--colors-user-bubble);
+      border: 1px solid var(--colors-user-bubble-border);
       color: #ffffff;
-      border-bottom-right-radius: var(--rounded-xs);
+      border-radius: 18px 18px 4px 18px;
+      margin-left: auto;
     }
 
-    /* Assistant Bubble (Elevated dark card) */
-    .message-row.assistant .message-bubble {
-      background: var(--colors-surface-dark-input);
-      color: var(--colors-on-dark-body);
-      border: 1px solid var(--colors-hairline);
-      border-bottom-left-radius: var(--rounded-xs);
-    }
-
-    .message-sender {
-      font-family: var(--font-sans);
-      font-size: 0.68rem;
+    .message-row.user .message-sender {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 0.35rem;
+      font-family: var(--font-mono);
+      font-size: 0.70rem;
       font-weight: 700;
-      letter-spacing: 1px;
+      letter-spacing: 0.8px;
       text-transform: uppercase;
       margin-bottom: 0.45rem;
-      opacity: 0.65;
+      color: #93c5fd;
+    }
+
+    .message-row.user .message-content {
+      color: #f8fafc;
+      text-align: left;
+      word-break: break-word;
+    }
+
+    /* Assistant Bubble (Left) */
+    .message-row.assistant .message-bubble {
+      max-width: 84%;
+      background: var(--colors-assistant-bubble);
+      border: 1px solid var(--colors-assistant-bubble-border);
+      color: #e2e8f0;
+      border-radius: 18px 18px 18px 4px;
+      margin-right: auto;
+    }
+
+    .message-row.assistant .message-sender {
+      display: flex;
+      justify-content: flex-start;
+      align-items: center;
+      gap: 0.35rem;
+      font-family: var(--font-mono);
+      font-size: 0.70rem;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      margin-bottom: 0.45rem;
+      color: var(--colors-brand-cyan);
+    }
+
+    .sender-icon {
+      font-size: 0.75rem;
     }
 
     /* Rich Markdown Output inside Bubble */
@@ -1024,17 +1095,17 @@
     .message-content strong,
     .message-content b {
       font-weight: 600;
-      color: var(--colors-on-dark);
+      color: #ffffff;
     }
 
     .message-content code {
       font-family: var(--font-mono);
-      background: #172a2a;
-      color: var(--colors-brand-mint);
+      background: #1a1c28;
+      color: var(--colors-brand-cyan);
       padding: 0.15rem 0.4rem;
       border-radius: var(--rounded-xs);
       font-size: 0.88em;
-      border: 1px solid var(--colors-hairline);
+      border: 1px solid #282b3d;
     }
 
     .message-row.user .message-content code {
@@ -1044,9 +1115,9 @@
     }
 
     .message-content pre {
-      background: #061111;
+      background: #090a10;
       border: 1px solid var(--colors-hairline);
-      color: #e0f2f1;
+      color: #e2e8f0;
       border-radius: var(--rounded-md);
       padding: 0.85rem 1rem;
       margin: 0.65rem 0;
@@ -1060,11 +1131,11 @@
       padding: 0;
     }
 
-    /* Sources Badges (Dark Clay Pill Tags) */
+    /* Sources Badges */
     .message-sources {
-      margin-top: 1rem;
+      margin-top: 0.9rem;
       padding-top: 0.75rem;
-      border-top: 1px solid var(--colors-hairline);
+      border-top: 1px solid #202333;
       display: flex;
       flex-wrap: wrap;
       align-items: center;
@@ -1072,11 +1143,11 @@
     }
 
     .sources-label {
-      color: var(--colors-on-dark-muted);
-      font-family: var(--font-sans);
-      font-size: 0.72rem;
+      color: #94a3b8;
+      font-family: var(--font-mono);
+      font-size: 0.70rem;
       font-weight: 700;
-      letter-spacing: 1px;
+      letter-spacing: 0.75px;
       text-transform: uppercase;
       margin-right: 0.2rem;
     }
@@ -1088,25 +1159,26 @@
     }
 
     .source-tag {
-      background: #112828;
-      color: var(--colors-brand-mint);
-      border: 1px solid #234848;
-      padding: 0.2rem 0.65rem;
+      background: #1a1d2b;
+      color: var(--colors-brand-cyan);
+      border: 1px solid #283048;
+      padding: 0.22rem 0.7rem;
       border-radius: var(--rounded-pill);
       font-family: var(--font-mono);
       font-size: 0.74rem;
       font-weight: 600;
       display: inline-flex;
       align-items: center;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
     }
 
     /* Decision Trace Card (Educational Jev Inspector) */
     .decision-trace-card {
-      margin-top: 0.9rem;
-      background: #091515;
-      border: 1px solid #1c3333;
+      margin-top: 0.95rem;
+      background: #0b0c13;
+      border: 1px solid #1c1f2e;
       border-radius: var(--rounded-md);
-      padding: 0.75rem 0.95rem;
+      padding: 0.8rem 1rem;
       font-size: 0.82rem;
     }
 
@@ -1116,7 +1188,7 @@
       align-items: center;
       margin-bottom: 0.65rem;
       padding-bottom: 0.4rem;
-      border-bottom: 1px solid #152929;
+      border-bottom: 1px solid #1a1d2b;
     }
 
     .trace-title {
@@ -1124,14 +1196,14 @@
       font-size: 0.68rem;
       font-weight: 700;
       letter-spacing: 0.75px;
-      color: var(--colors-brand-mint);
+      color: var(--colors-brand-cyan);
     }
 
     .trace-engine {
       font-family: var(--font-mono);
       font-size: 0.68rem;
       color: var(--colors-on-dark-muted);
-      background: #112424;
+      background: #151724;
       padding: 0.15rem 0.45rem;
       border-radius: var(--rounded-xs);
     }
@@ -1163,19 +1235,19 @@
     }
 
     .trace-val.intent {
-      color: #9fe2d4;
+      color: var(--colors-brand-indigo);
     }
 
     .trace-val.quality-sufficient {
-      color: #4ade80;
+      color: var(--colors-success);
     }
 
     .trace-val.quality-insufficient {
-      color: #f87171;
+      color: var(--colors-error);
     }
 
     .trace-val.quality-uncertain {
-      color: #fbbf24;
+      color: var(--colors-warning);
     }
 
     .chat-header-actions {
@@ -1185,9 +1257,9 @@
     }
 
     #inspector-toggle-btn.active {
-      border-color: var(--colors-brand-mint);
-      color: var(--colors-brand-mint);
-      background: #112828;
+      border-color: var(--colors-brand-cyan);
+      color: var(--colors-brand-cyan);
+      background: #111a2a;
     }
 
     /* Thinking State */
@@ -1196,7 +1268,7 @@
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: var(--colors-brand-ochre);
+      background: var(--colors-brand-cyan);
       margin-right: 0.4rem;
       animation: pulseAnim 1.2s infinite ease-in-out;
     }
@@ -1217,20 +1289,21 @@
 
     .text-input {
       flex: 1;
-      height: 46px;
+      height: 48px;
       background: var(--colors-surface-dark-input);
       border: 1px solid var(--colors-hairline);
       color: var(--colors-on-dark);
-      padding: 0 1.15rem;
+      padding: 0 1.25rem;
       border-radius: var(--rounded-md);
       font-size: 0.94rem;
       font-family: var(--font-sans);
       outline: none;
-      transition: border-color 0.15s ease;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
 
     .text-input:focus:not(:disabled) {
-      border-color: var(--colors-brand-mint);
+      border-color: var(--colors-brand-primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
     }
 
     .text-input:disabled {
@@ -1239,8 +1312,32 @@
     }
 
     .send-button {
-      height: 46px;
-      padding: 0 1.4rem;
+      height: 48px;
+      padding: 0 1.5rem;
+      background: #ffffff;
+      color: #08090c;
+      font-weight: 600;
+      border-radius: var(--rounded-md);
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.15s ease;
+    }
+
+    .send-button:hover:not(:disabled) {
+      background: #f1f5f9;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(255, 255, 255, 0.15);
+    }
+
+    .send-button:disabled {
+      background: #191b26;
+      color: var(--colors-on-dark-muted);
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
     }
 
     .arrow-icon {
@@ -1248,7 +1345,7 @@
       line-height: 1;
     }
 
-    /* Footer (Clay surface-dark) */
+    /* Footer */
     .app-footer {
       background: var(--colors-surface-dark);
       border-top: 1px solid var(--colors-hairline);
@@ -1277,7 +1374,7 @@
 
     .footer-copyright {
       font-size: 0.75rem;
-      color: #4b6363;
+      color: #475569;
       font-family: var(--font-mono);
     }
 
@@ -1295,8 +1392,9 @@
       .content-card {
         padding: 1.25rem;
       }
-      .message-bubble {
-        max-width: 95%;
+      .message-row.user .message-bubble,
+      .message-row.assistant .message-bubble {
+        max-width: 92%;
       }
     }
   </style>
